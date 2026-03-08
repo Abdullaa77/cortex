@@ -14,6 +14,7 @@ export default function QuickCapture({
   const [value, setValue] = useState('');
   const [flash, setFlash] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [focused, setFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const prefix = value.startsWith('!') ? 'urgent' : value.startsWith('?') ? 'idea' : null;
@@ -28,7 +29,7 @@ export default function QuickCapture({
       await onCapture(text);
       setValue('');
       setFlash(true);
-      setTimeout(() => setFlash(false), 300);
+      setTimeout(() => setFlash(false), 400);
     } finally {
       setSubmitting(false);
       inputRef.current?.focus();
@@ -46,11 +47,11 @@ export default function QuickCapture({
     return (
       <form onSubmit={handleSubmit} className="w-full px-4 py-3">
         <div
-          className={`flex items-center gap-2 rounded border font-mono transition-colors ${
+          className={`flex items-center gap-2 rounded border font-mono transition-all duration-300 ${
             flash ? 'border-accent bg-accent/10' : 'border-border bg-surface'
           }`}
         >
-          <span className="pl-3 text-accent">{'>'}</span>
+          <span className={`pl-3 text-accent text-base ${focused ? 'text-glow-sm' : ''}`}>{'>'}</span>
           {prefix === 'urgent' && (
             <span className="rounded bg-red-500/20 px-1.5 py-0.5 text-[10px] font-bold text-red-400">
               URGENT
@@ -67,9 +68,11 @@ export default function QuickCapture({
             value={value}
             onChange={(e) => setValue(e.target.value)}
             onKeyDown={handleKeyDown}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
             placeholder="Capture a thought..."
             autoFocus
-            className="flex-1 bg-transparent py-3 font-mono text-sm text-text-primary caret-accent placeholder:text-text-muted focus:outline-none"
+            className="flex-1 bg-transparent py-3 font-mono text-sm text-text-primary caret-accent placeholder:text-text-muted/50 focus:outline-none"
           />
           <button
             type="submit"
@@ -85,11 +88,16 @@ export default function QuickCapture({
 
   return (
     <div
-      className={`hidden lg:flex h-14 items-center gap-2 border-t border-border bg-surface px-4 font-mono transition-colors ${
-        flash ? 'bg-accent/10' : ''
+      className={`hidden lg:flex h-14 items-center gap-2 px-4 font-mono transition-all duration-300 ${
+        flash ? 'animate-[capture-flash_0.4s_ease-out]' : ''
       }`}
+      style={{
+        borderTop: '1px solid transparent',
+        borderImage: 'linear-gradient(90deg, transparent, rgba(0, 255, 136, 0.15), transparent) 1',
+        background: 'rgba(17, 17, 24, 0.6)',
+      }}
     >
-      <span className="text-accent">{'>'}</span>
+      <span className={`text-accent text-base ${focused ? 'text-glow-sm' : ''}`}>{'>'}</span>
       {prefix === 'urgent' && (
         <span className="rounded bg-red-500/20 px-1.5 py-0.5 text-[10px] font-bold text-red-400">
           URGENT
@@ -106,8 +114,10 @@ export default function QuickCapture({
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={handleKeyDown}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
         placeholder="Capture a thought..."
-        className="flex-1 bg-transparent font-mono text-sm text-text-primary caret-accent placeholder:text-text-muted focus:outline-none"
+        className="flex-1 bg-transparent font-mono text-sm text-text-primary caret-accent placeholder:text-text-muted/50 focus:outline-none"
       />
       <button
         type="button"

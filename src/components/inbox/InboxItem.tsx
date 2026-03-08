@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import type { InboxItem as InboxItemType } from '@/lib/types';
 
 interface InboxItemProps {
@@ -32,13 +33,24 @@ const ACTION_BUTTONS = [
 ] as const;
 
 export default function InboxItem({ item, onProcess }: InboxItemProps) {
+  const [exiting, setExiting] = useState(false);
+
+  const handleProcess = (type: 'task' | 'idea' | 'project' | 'trash') => {
+    setExiting(true);
+    setTimeout(() => onProcess(item, type), 200);
+  };
+
   return (
-    <div className="flex items-center justify-between p-3 border-b border-border hover:bg-surface2/50 transition-colors duration-150 group">
+    <div
+      className={`flex items-center justify-between p-3 border-b border-border hover:bg-surface2/30 transition-all duration-150 group ${
+        exiting ? 'animate-[slideOutLeft_0.2s_ease-out_forwards]' : ''
+      }`}
+    >
       <div className="flex-1 min-w-0 mr-4">
         <p className="font-mono text-text-primary text-sm truncate">
           &ldquo;{item.raw_text}&rdquo;
         </p>
-        <p className="text-text-muted text-xs mt-1 font-mono">
+        <p className="text-text-muted/60 text-[11px] mt-1 font-mono">
           {relativeTime(item.created_at)}
         </p>
       </div>
@@ -47,9 +59,9 @@ export default function InboxItem({ item, onProcess }: InboxItemProps) {
         {ACTION_BUTTONS.map((btn) => (
           <button
             key={btn.type}
-            onClick={() => onProcess(item, btn.type)}
-            className={`bg-surface2 border border-border rounded px-2 py-1 text-xs font-mono
-              text-text-muted transition-colors duration-150
+            onClick={() => handleProcess(btn.type)}
+            className={`bg-surface2/50 border border-border rounded px-2 py-1 text-xs font-mono
+              text-text-muted transition-all duration-150
               ${btn.hoverText} ${btn.hoverBorder}`}
             title={btn.type === 'trash' ? 'Trash' : `Process to ${btn.type}`}
           >

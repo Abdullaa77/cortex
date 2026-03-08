@@ -39,7 +39,7 @@ export default function InboxPage() {
 
   return (
     <AppShell>
-      <div className="mx-auto max-w-3xl p-4 lg:p-6">
+      <div className="mx-auto max-w-3xl p-4 lg:px-10 lg:py-6 page-enter">
         <SectionHeader title="INBOX" count={items.length > 0 ? `${items.length} unprocessed` : undefined} />
 
         {items.length === 0 ? (
@@ -70,11 +70,11 @@ export default function InboxPage() {
 
 function SectionHeader({ title, count }: { title: string; count?: string }) {
   return (
-    <div className="mb-3 mt-6 flex items-center gap-2 font-mono text-xs uppercase text-text-muted">
-      <span className="text-border">──</span>
+    <div className="mb-3 mt-8 flex items-center gap-2 font-mono text-[11px] font-semibold uppercase tracking-[3px]" style={{ color: '#4A6858' }}>
+      <span>--</span>
       <span>{title}</span>
-      {count && <span className="text-text-muted">({count})</span>}
-      <span className="flex-1 text-border">─────────────────────</span>
+      {count && <span className="tracking-normal font-normal text-text-muted">({count})</span>}
+      <span className="flex-1 section-line" />
     </div>
   );
 }

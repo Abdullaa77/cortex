@@ -15,10 +15,10 @@ interface TaskRowProps {
 }
 
 const STATUS_ICONS: Record<Task['status'], string> = {
-  todo: '□',
-  in_progress: '◐',
-  done: '■',
-  cancelled: '■',
+  todo: '\u25A1',
+  in_progress: '\u25D0',
+  done: '\u25A0',
+  cancelled: '\u25A0',
 };
 
 export default function TaskRow({ task, onComplete, onTogglePin, onClick, areas }: TaskRowProps) {
@@ -40,7 +40,10 @@ export default function TaskRow({ task, onComplete, onTogglePin, onClick, areas 
 
   return (
     <div
-      className="flex items-center gap-3 px-3 py-2 cursor-pointer rounded transition-colors duration-150 hover:bg-surface2 group"
+      className="flex items-center gap-3 px-3 py-2.5 cursor-pointer rounded transition-all duration-150 hover:bg-surface2/50 group"
+      style={{
+        borderLeft: task.priority <= 2 ? `2px solid ${priorityColor}33` : '2px solid transparent',
+      }}
       onClick={() => onClick(task)}
     >
       {/* Status icon */}
@@ -63,7 +66,10 @@ export default function TaskRow({ task, onComplete, onTogglePin, onClick, areas 
       {/* Priority indicator */}
       <span
         className="font-mono text-xs shrink-0"
-        style={{ color: priorityColor }}
+        style={{
+          color: priorityColor,
+          textShadow: task.priority === 1 ? `0 0 6px ${priorityColor}66` : undefined,
+        }}
       >
         [{prioritySymbol(task.priority)}]
       </span>
@@ -95,7 +101,7 @@ export default function TaskRow({ task, onComplete, onTogglePin, onClick, areas 
 
       {/* Estimated time */}
       {task.estimated_minutes && (
-        <span className="font-mono text-xs text-text-muted shrink-0">
+        <span className="font-mono text-[11px] text-text-muted shrink-0">
           {task.estimated_minutes}m
         </span>
       )}

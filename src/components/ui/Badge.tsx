@@ -15,8 +15,9 @@ export default function Badge({ label, color, size = 'sm' }: BadgeProps) {
     <span
       className={`inline-flex items-center font-mono font-medium rounded-full ${sizeClasses}`}
       style={{
-        backgroundColor: `${color}33`,
+        backgroundColor: `${color}22`,
         color: color,
+        boxShadow: `inset 0 0 8px ${color}1A`,
       }}
     >
       {label}

@@ -19,7 +19,7 @@ export default function AreasPage() {
   const router = useRouter();
   const [counts, setCounts] = useState<AreaCounts>({ projects: {}, tasks: {} });
   const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({ name: '', icon: '◉', color: '#00FF88' });
+  const [formData, setFormData] = useState({ name: '', icon: '\u25C9', color: '#00FF88' });
 
   useEffect(() => {
     if (!session?.user || areas.length === 0) return;
@@ -45,11 +45,11 @@ export default function AreasPage() {
 
   return (
     <AppShell>
-      <div className="mx-auto max-w-3xl p-4 lg:p-6">
-        <div className="mb-3 mt-6 flex items-center gap-2 font-mono text-xs uppercase text-text-muted">
-          <span className="text-border">──</span>
+      <div className="mx-auto max-w-3xl p-4 lg:px-10 lg:py-6 page-enter">
+        <div className="mb-3 mt-8 flex items-center gap-2 font-mono text-[11px] font-semibold uppercase tracking-[3px]" style={{ color: '#4A6858' }}>
+          <span>--</span>
           <span>AREAS</span>
-          <span className="flex-1 text-border">─────────────────────</span>
+          <span className="flex-1 section-line" />
         </div>
 
         <div>
@@ -60,13 +60,13 @@ export default function AreasPage() {
               <button
                 key={area.id}
                 onClick={() => router.push(`/areas/${area.id}`)}
-                className="flex w-full items-center gap-3 border-b border-border px-3 py-3 text-left font-mono text-sm transition-colors hover:bg-surface2"
+                className="flex w-full items-center gap-3 border-b border-border/50 px-3 py-3 text-left font-mono text-sm transition-all duration-150 hover:bg-surface2/30"
               >
                 <span style={{ color: area.color }} className="w-5 text-center">{area.icon}</span>
                 <span className="flex-1 font-bold uppercase tracking-wide" style={{ color: area.color }}>
                   {area.name}
                 </span>
-                <span className="text-xs text-text-muted">
+                <span className="text-[11px] text-text-muted">
                   {pCount} project{pCount !== 1 ? 's' : ''} &middot; {tCount} task{tCount !== 1 ? 's' : ''}
                 </span>
               </button>
@@ -76,7 +76,7 @@ export default function AreasPage() {
 
         <button
           onClick={() => setShowForm(true)}
-          className="mt-4 font-mono text-xs text-accent hover:text-accent-dim"
+          className="mt-4 font-mono text-xs text-accent hover:text-accent-dim transition-colors duration-150"
         >
           + Add Area
         </button>
@@ -88,7 +88,7 @@ export default function AreasPage() {
             value={formData.name}
             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
             placeholder="Area name"
-            className="w-full rounded border border-border bg-surface2 px-3 py-2 font-mono text-sm text-text-primary placeholder:text-text-muted focus:border-accent focus:outline-none"
+            className="w-full rounded border border-border bg-surface2 px-3 py-2 font-mono text-sm text-text-primary placeholder:text-text-muted/50 focus:border-accent/50 focus:outline-none transition-colors duration-150"
             autoFocus
           />
           <div className="flex gap-3">
@@ -96,7 +96,7 @@ export default function AreasPage() {
               value={formData.icon}
               onChange={(e) => setFormData({ ...formData, icon: e.target.value })}
               placeholder="Icon"
-              className="w-16 rounded border border-border bg-surface2 px-3 py-2 text-center font-mono text-sm text-text-primary focus:border-accent focus:outline-none"
+              className="w-16 rounded border border-border bg-surface2 px-3 py-2 text-center font-mono text-sm text-text-primary focus:border-accent/50 focus:outline-none transition-colors duration-150"
             />
             <input
               type="color"
@@ -107,15 +107,15 @@ export default function AreasPage() {
           </div>
         </div>
         <div className="mt-4 flex justify-end gap-3">
-          <button onClick={() => setShowForm(false)} className="rounded px-3 py-1.5 font-mono text-sm text-text-muted hover:bg-surface2">Cancel</button>
+          <button onClick={() => setShowForm(false)} className="rounded px-3 py-1.5 font-mono text-sm text-text-muted hover:bg-surface2 transition-colors duration-150">Cancel</button>
           <button
             disabled={!formData.name.trim()}
             onClick={async () => {
               await createArea(formData);
               setShowForm(false);
-              setFormData({ name: '', icon: '◉', color: '#00FF88' });
+              setFormData({ name: '', icon: '\u25C9', color: '#00FF88' });
             }}
-            className="rounded bg-accent/20 px-3 py-1.5 font-mono text-sm text-accent hover:bg-accent/30 disabled:opacity-50"
+            className="rounded bg-accent/20 px-3 py-1.5 font-mono text-sm text-accent hover:bg-accent/30 disabled:opacity-50 transition-colors duration-150"
           >Create</button>
         </div>
       </Modal>

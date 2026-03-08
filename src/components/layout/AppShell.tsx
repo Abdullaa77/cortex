@@ -26,7 +26,7 @@ export default function AppShell({ children }: AppShellProps) {
       <div className="flex flex-1 overflow-hidden">
         <Sidebar inboxCount={inbox.unprocessedCount} />
 
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto bg-grid">
           {children}
         </main>
       </div>
@@ -46,7 +46,10 @@ export default function AppShell({ children }: AppShellProps) {
             className="flex-1 bg-bg/80 backdrop-blur-sm"
             aria-label="Close capture"
           />
-          <div className="bg-surface border-t border-border">
+          <div
+            className="bg-surface/95 backdrop-blur-md border-t border-border"
+            style={{ animation: 'slideUp 0.2s ease-out' }}
+          >
             <QuickCapture
               isModal
               onCapture={async (text) => {

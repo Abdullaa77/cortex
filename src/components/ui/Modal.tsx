@@ -33,14 +33,17 @@ export default function Modal({ isOpen, onClose, title, children, footer }: Moda
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center transition-opacity duration-200"
-      style={{ background: 'rgba(0, 0, 0, 0.7)' }}
+      className="fixed inset-0 z-50 flex items-center justify-center animate-[overlay-in_150ms_ease-out]"
+      style={{ background: 'rgba(0, 0, 0, 0.75)', backdropFilter: 'blur(4px)' }}
       onClick={onClose}
     >
       <div
-        className="bg-surface border border-border rounded-lg w-full max-w-lg mx-4 shadow-xl
-          transition-all duration-200 scale-100 opacity-100
-          animate-[modal-in_200ms_ease-out]"
+        className="w-full max-w-lg mx-4 rounded-lg shadow-xl animate-[modal-in_150ms_ease-out]"
+        style={{
+          background: 'rgba(17, 17, 24, 0.95)',
+          backdropFilter: 'blur(12px)',
+          border: '1px solid rgba(0, 255, 136, 0.1)',
+        }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

@@ -32,7 +32,7 @@ export default function IdeasPage() {
 
   return (
     <AppShell>
-      <div className="mx-auto max-w-3xl p-4 lg:p-6">
+      <div className="mx-auto max-w-3xl p-4 lg:px-10 lg:py-6 page-enter">
         {ideas.length === 0 ? (
           <EmptyState
             title="No ideas captured."
@@ -41,11 +41,11 @@ export default function IdeasPage() {
           />
         ) : (
           <>
-            <div className="mb-3 mt-6 flex items-center gap-2 font-mono text-xs uppercase text-text-muted">
-              <span className="text-border">──</span>
+            <div className="mb-3 mt-8 flex items-center gap-2 font-mono text-[11px] font-semibold uppercase tracking-[3px]" style={{ color: '#4A6858' }}>
+              <span>--</span>
               <span>IDEAS VAULT</span>
-              <span className="text-text-muted">({ideas.length})</span>
-              <span className="flex-1 text-border">─────────────────────</span>
+              <span className="tracking-normal font-normal text-text-muted">({ideas.length})</span>
+              <span className="flex-1 section-line" />
             </div>
 
             {([3, 2, 1, 0] as const).map((rating) => {
@@ -53,11 +53,11 @@ export default function IdeasPage() {
               if (group.length === 0) return null;
               return (
                 <div key={rating}>
-                  <div className="mb-2 mt-4 flex items-center gap-2 font-mono text-xs uppercase text-text-muted">
-                    <span className="text-border">──</span>
+                  <div className="mb-2 mt-6 flex items-center gap-2 font-mono text-[11px] font-semibold uppercase tracking-[3px]" style={{ color: '#4A6858' }}>
+                    <span>--</span>
                     <span>{RATING_LABELS[rating].toUpperCase()}</span>
-                    <span className="text-text-muted">({group.length})</span>
-                    <span className="flex-1 text-border">─────────────────────</span>
+                    <span className="tracking-normal font-normal text-text-muted">({group.length})</span>
+                    <span className="flex-1 section-line" />
                   </div>
                   {group.map((idea) => (
                     <IdeaCard
@@ -77,7 +77,8 @@ export default function IdeasPage() {
         {/* FAB */}
         <button
           onClick={() => setShowForm(true)}
-          className="fixed bottom-20 right-6 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-accent text-bg shadow-lg transition-transform hover:scale-105 lg:bottom-20"
+          className="fixed bottom-20 right-6 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-accent text-bg shadow-lg transition-transform duration-150 hover:scale-110 lg:bottom-20"
+          style={{ animation: 'pulse-glow 2s ease-in-out infinite' }}
         >
           <Plus size={24} />
         </button>

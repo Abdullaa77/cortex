@@ -41,7 +41,7 @@ export default function TerminalPage() {
 
   return (
     <AppShell>
-      <div className="mx-auto max-w-3xl p-4 pb-8 lg:p-6">
+      <div className="mx-auto max-w-3xl p-4 pb-8 lg:px-10 lg:py-6 page-enter">
         {/* TODAY section */}
         <SectionHeader title="TODAY" count={todayTasks.length > 0 ? `${stats.todayCompleted}/${todayTasks.length} done` : undefined} />
 
@@ -51,7 +51,7 @@ export default function TerminalPage() {
             description="Nothing to do... or is there? Capture something."
           />
         ) : (
-          <div className="mb-6">
+          <div className="mb-6 flex flex-col gap-0.5">
             {todayTasks.map((task) => (
               <TaskRow
                 key={task.id}
@@ -73,14 +73,14 @@ export default function TerminalPage() {
               {inbox.items.slice(0, 5).map((item) => (
                 <div
                   key={item.id}
-                  className="border-b border-border px-3 py-2 font-mono text-sm text-text-muted"
+                  className="border-b border-border/50 px-3 py-2 font-mono text-sm text-text-muted"
                 >
                   &quot;{item.raw_text}&quot;
                 </div>
               ))}
               <Link
                 href="/inbox"
-                className="mt-2 inline-block font-mono text-xs text-accent hover:text-accent-dim"
+                className="mt-2 inline-block font-mono text-xs text-accent hover:text-accent-dim transition-colors duration-150"
               >
                 Process All →
               </Link>
@@ -94,19 +94,19 @@ export default function TerminalPage() {
           <span>
             Tasks: <span className="text-accent">{stats.todayCompleted}/{todayTasks.length}</span> today
           </span>
-          <span className="text-border">│</span>
+          <span className="text-accent/20">|</span>
           <span>
             Inbox: <span className="text-accent">{stats.inboxCount}</span>
           </span>
-          <span className="text-border">│</span>
+          <span className="text-accent/20">|</span>
           <span>
             Projects: <span className="text-accent">{stats.activeProjects}</span> active
           </span>
-          <span className="text-border">│</span>
+          <span className="text-accent/20">|</span>
           <span>
             Ideas: <span className="text-accent">{stats.totalIdeas}</span>
           </span>
-          <span className="text-border">│</span>
+          <span className="text-accent/20">|</span>
           <span>
             Streak: <span className="text-accent">{stats.streak}d</span>
           </span>
@@ -146,11 +146,11 @@ export default function TerminalPage() {
 
 function SectionHeader({ title, count }: { title: string; count?: string }) {
   return (
-    <div className="mb-3 mt-6 flex items-center gap-2 font-mono text-xs uppercase text-text-muted">
-      <span className="text-border">──</span>
+    <div className="mb-3 mt-8 flex items-center gap-2 font-mono text-[11px] font-semibold uppercase tracking-[3px]" style={{ color: '#4A6858' }}>
+      <span>--</span>
       <span>{title}</span>
-      {count && <span className="text-text-muted">({count})</span>}
-      <span className="flex-1 text-border">─────────────────────</span>
+      {count && <span className="tracking-normal font-normal text-text-muted">({count})</span>}
+      <span className="flex-1 section-line" />
     </div>
   );
 }

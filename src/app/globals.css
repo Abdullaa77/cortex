@@ -20,45 +20,126 @@ body {
   font-family: var(--font-mono);
 }
 
-/* Scrollbar styling */
+/* ============================================
+   Scrollbar
+   ============================================ */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
-
 ::-webkit-scrollbar-track {
-  background: var(--color-bg);
+  background: transparent;
 }
-
 ::-webkit-scrollbar-thumb {
-  background: var(--color-border);
+  background: rgba(0, 255, 136, 0.15);
   border-radius: 3px;
 }
-
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-text-muted);
+  background: rgba(0, 255, 136, 0.3);
 }
 
-/* Selection color */
+/* Selection */
 ::selection {
   background: rgba(0, 255, 136, 0.2);
   color: var(--color-accent);
 }
 
-/* Modal animation */
+/* ============================================
+   Background grid pattern (content area only)
+   ============================================ */
+.bg-grid {
+  background-image:
+    linear-gradient(rgba(0, 255, 136, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 255, 136, 0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* ============================================
+   Glass / frosted surface
+   ============================================ */
+.glass {
+  background: rgba(17, 17, 24, 0.8);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(0, 255, 136, 0.08);
+}
+.glass:hover {
+  border-color: rgba(0, 255, 136, 0.2);
+  box-shadow: 0 0 20px rgba(0, 255, 136, 0.05);
+}
+
+/* ============================================
+   Glow utilities
+   ============================================ */
+.text-glow {
+  text-shadow: 0 0 10px rgba(0, 255, 136, 0.4), 0 0 40px rgba(0, 255, 136, 0.1);
+}
+.text-glow-sm {
+  text-shadow: 0 0 8px rgba(0, 255, 136, 0.3);
+}
+
+/* ============================================
+   Section header gradient line
+   ============================================ */
+.section-line {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(0, 255, 136, 0.15), transparent);
+}
+
+/* ============================================
+   Keyframe animations
+   ============================================ */
+
+/* Modal enter */
 @keyframes modal-in {
-  from {
-    opacity: 0;
-    transform: scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Page content fade-in */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.page-enter {
+  animation: fadeIn 0.2s ease-out;
 }
 
 /* Loading cursor blink */
 @keyframes blink {
   0%, 100% { opacity: 1; }
   50% { opacity: 0; }
+}
+
+/* FAB pulse glow */
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 15px rgba(0, 255, 136, 0.3); }
+  50% { box-shadow: 0 0 25px rgba(0, 255, 136, 0.5); }
+}
+
+/* Inbox item slide-out */
+@keyframes slideOutLeft {
+  to { transform: translateX(-20px); opacity: 0; }
+}
+
+/* Badge count bounce */
+@keyframes badge-pop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+
+/* Mobile capture slide-up */
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+/* Quick capture flash */
+@keyframes capture-flash {
+  0% { background-color: rgba(0, 255, 136, 0.08); }
+  100% { background-color: transparent; }
 }
