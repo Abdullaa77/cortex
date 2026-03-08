@@ -1,3 +1,156 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import AppShell from '@/components/layout/AppShell';
+import { useTasks } from '@/hooks/useTasks';
+import { useInbox } from '@/hooks/useInbox';
+import { useStats } from '@/hooks/useStats';
+import { useAreas } from '@/hooks/useAreas';
+import TaskRow from '@/components/tasks/TaskRow';
+import TaskDetail from '@/components/tasks/TaskDetail';
+import TaskForm from '@/components/tasks/TaskForm';
+import LoadingState from '@/components/ui/LoadingState';
+import EmptyState from '@/components/ui/EmptyState';
+import type { Task } from '@/lib/types';
+import Link from 'next/link';
+
 export default function TerminalPage() {
-  return <div>Terminal</div>;
+  const { loading: tasksLoading, completeTask, togglePin, updateTask, deleteTask, createTask, getTodayTasks } = useTasks();
+  const inbox = useInbox();
+  const { stats, fetchStats } = useStats();
+  const { areas } = useAreas();
+
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [showTaskForm, setShowTaskForm] = useState(false);
+
+  const todayTasks = getTodayTasks();
+
+  useEffect(() => {
+    fetchStats(todayTasks.length);
+  }, [fetchStats, todayTasks.length]);
+
+  if (tasksLoading) {
+    return (
+      <AppShell>
+        <div className="p-6">
+          <LoadingState />
+        </div>
+      </AppShell>
+    );
+  }
+
+  return (
+    <AppShell>
+      <div className="mx-auto max-w-3xl p-4 pb-8 lg:p-6">
+        {/* TODAY section */}
+        <SectionHeader title="TODAY" count={todayTasks.length > 0 ? `${stats.todayCompleted}/${todayTasks.length} done` : undefined} />
+
+        {todayTasks.length === 0 ? (
+          <EmptyState
+            title="All clear."
+            description="Nothing to do... or is there? Capture something."
+          />
+        ) : (
+          <div className="mb-6">
+            {todayTasks.map((task) => (
+              <TaskRow
+                key={task.id}
+                task={task}
+                areas={areas}
+                onComplete={completeTask}
+                onTogglePin={togglePin}
+                onClick={setSelectedTask}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* INBOX preview */}
+        {inbox.items.length > 0 && (
+          <>
+            <SectionHeader title="INBOX" count={`${inbox.unprocessedCount} unprocessed`} />
+            <div className="mb-6">
+              {inbox.items.slice(0, 5).map((item) => (
+                <div
+                  key={item.id}
+                  className="border-b border-border px-3 py-2 font-mono text-sm text-text-muted"
+                >
+                  &quot;{item.raw_text}&quot;
+                </div>
+              ))}
+              <Link
+                href="/inbox"
+                className="mt-2 inline-block font-mono text-xs text-accent hover:text-accent-dim"
+              >
+                Process All →
+              </Link>
+            </div>
+          </>
+        )}
+
+        {/* STATS bar */}
+        <SectionHeader title="STATS" />
+        <div className="flex flex-wrap gap-x-4 gap-y-1 font-mono text-xs text-text-muted">
+          <span>
+            Tasks: <span className="text-accent">{stats.todayCompleted}/{todayTasks.length}</span> today
+          </span>
+          <span className="text-border">│</span>
+          <span>
+            Inbox: <span className="text-accent">{stats.inboxCount}</span>
+          </span>
+          <span className="text-border">│</span>
+          <span>
+            Projects: <span className="text-accent">{stats.activeProjects}</span> active
+          </span>
+          <span className="text-border">│</span>
+          <span>
+            Ideas: <span className="text-accent">{stats.totalIdeas}</span>
+          </span>
+          <span className="text-border">│</span>
+          <span>
+            Streak: <span className="text-accent">{stats.streak}d</span>
+          </span>
+        </div>
+      </div>
+
+      {/* Task detail modal */}
+      {selectedTask && (
+        <TaskDetail
+          task={selectedTask}
+          isOpen={!!selectedTask}
+          onClose={() => setSelectedTask(null)}
+          onComplete={completeTask}
+          onTogglePin={togglePin}
+          onUpdate={updateTask}
+          onDelete={async (id) => {
+            await deleteTask(id);
+            setSelectedTask(null);
+          }}
+          areas={areas}
+        />
+      )}
+
+      {/* Task form modal */}
+      {showTaskForm && (
+        <TaskForm
+          onClose={() => setShowTaskForm(false)}
+          onSave={async (data) => {
+            await createTask(data);
+            setShowTaskForm(false);
+          }}
+        />
+      )}
+    </AppShell>
+  );
+}
+
+function SectionHeader({ title, count }: { title: string; count?: string }) {
+  return (
+    <div className="mb-3 mt-6 flex items-center gap-2 font-mono text-xs uppercase text-text-muted">
+      <span className="text-border">──</span>
+      <span>{title}</span>
+      {count && <span className="text-text-muted">({count})</span>}
+      <span className="flex-1 text-border">─────────────────────</span>
+    </div>
+  );
 }
