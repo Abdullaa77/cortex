@@ -103,7 +103,7 @@ export default function ProjectDetailPage() {
           <>
             <SectionHeader title="TODO" />
             {grouped.todo.map((t) => (
-              <TaskRow key={t.id} task={t} areas={areas} onComplete={completeTask} onTogglePin={togglePin} onClick={setSelectedTask} />
+              <TaskRow key={t.id} task={t} areas={areas} onComplete={completeTask} onTogglePin={togglePin} onStatusChange={(id, status) => updateTask(id, { status })} onClick={setSelectedTask} />
             ))}
           </>
         )}
@@ -112,7 +112,7 @@ export default function ProjectDetailPage() {
           <>
             <SectionHeader title="IN PROGRESS" />
             {grouped.in_progress.map((t) => (
-              <TaskRow key={t.id} task={t} areas={areas} onComplete={completeTask} onTogglePin={togglePin} onClick={setSelectedTask} />
+              <TaskRow key={t.id} task={t} areas={areas} onComplete={completeTask} onTogglePin={togglePin} onStatusChange={(id, status) => updateTask(id, { status })} onClick={setSelectedTask} />
             ))}
           </>
         )}
@@ -121,7 +121,7 @@ export default function ProjectDetailPage() {
           <>
             <SectionHeader title="DONE" />
             {grouped.done.map((t) => (
-              <TaskRow key={t.id} task={t} areas={areas} onComplete={completeTask} onTogglePin={togglePin} onClick={setSelectedTask} />
+              <TaskRow key={t.id} task={t} areas={areas} onComplete={completeTask} onTogglePin={togglePin} onStatusChange={(id, status) => updateTask(id, { status })} onClick={setSelectedTask} />
             ))}
           </>
         )}

@@ -59,6 +59,7 @@ export default function TerminalPage() {
                 areas={areas}
                 onComplete={completeTask}
                 onTogglePin={togglePin}
+                onStatusChange={(id, status) => updateTask(id, { status })}
                 onClick={setSelectedTask}
               />
             ))}

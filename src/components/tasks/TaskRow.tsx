@@ -10,6 +10,7 @@ interface TaskRowProps {
   task: Task;
   onComplete: (id: string) => void;
   onTogglePin: (id: string) => void;
+  onStatusChange?: (id: string, status: Task['status']) => void;
   onClick: (task: Task) => void;
   areas?: Area[];
 }
@@ -21,14 +22,18 @@ const STATUS_ICONS: Record<Task['status'], string> = {
   cancelled: '\u25A0',
 };
 
-export default function TaskRow({ task, onComplete, onTogglePin, onClick, areas }: TaskRowProps) {
+export default function TaskRow({ task, onComplete, onTogglePin, onStatusChange, onClick, areas }: TaskRowProps) {
   const area = areas?.find((a) => a.id === task.area_id);
   const overdue = isOverdue(task.due_date);
   const priorityColor = PRIORITY_COLORS[task.priority] || PRIORITY_COLORS[3];
 
   const handleStatusClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (task.status === 'todo' || task.status === 'in_progress') {
+    if (task.status === 'todo') {
+      if (onStatusChange) {
+        onStatusChange(task.id, 'in_progress');
+      }
+    } else if (task.status === 'in_progress') {
       onComplete(task.id);
     }
   };
@@ -58,7 +63,7 @@ export default function TaskRow({ task, onComplete, onTogglePin, onClick, areas 
                 ? '#3B82F6'
                 : '#6B7280',
         }}
-        title={task.status === 'todo' || task.status === 'in_progress' ? 'Mark complete' : ''}
+        title={task.status === 'todo' ? 'Start' : task.status === 'in_progress' ? 'Complete' : ''}
       >
         {STATUS_ICONS[task.status]}
       </button>

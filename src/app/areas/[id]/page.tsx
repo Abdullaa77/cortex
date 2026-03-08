@@ -79,7 +79,7 @@ export default function AreaDetailPage() {
         {tasks.length > 0 ? (
           <div className="mb-4">
             {tasks.map((t) => (
-              <TaskRow key={t.id} task={t} areas={areas} onComplete={completeTask} onTogglePin={togglePin} onClick={setSelectedTask} />
+              <TaskRow key={t.id} task={t} areas={areas} onComplete={completeTask} onTogglePin={togglePin} onStatusChange={(id, status) => updateTask(id, { status })} onClick={setSelectedTask} />
             ))}
           </div>
         ) : (
