@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, type ReactNode } from 'react';
-import { useInbox } from '@/hooks/useInbox';
+import { useInbox } from '@/components/providers/InboxProvider';
 import Header from './Header';
 import Sidebar from './Sidebar';
 import MobileNav from './MobileNav';

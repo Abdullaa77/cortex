@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { JetBrains_Mono, Inter } from 'next/font/google';
 import { SupabaseProvider } from '@/components/providers/SupabaseProvider';
+import { InboxProvider } from '@/components/providers/InboxProvider';
 import './globals.css';
 
 const jetbrainsMono = JetBrains_Mono({
@@ -28,7 +29,9 @@ export default function RootLayout({
   return (
     <html lang="en" className={`dark ${jetbrainsMono.variable} ${inter.variable}`}>
       <body>
-        <SupabaseProvider>{children}</SupabaseProvider>
+        <SupabaseProvider>
+          <InboxProvider>{children}</InboxProvider>
+        </SupabaseProvider>
       </body>
     </html>
   );

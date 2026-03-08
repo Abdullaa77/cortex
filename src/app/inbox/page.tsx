@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import AppShell from '@/components/layout/AppShell';
-import { useInbox } from '@/hooks/useInbox';
+import { useInbox } from '@/components/providers/InboxProvider';
 import InboxItemComponent from '@/components/inbox/InboxItem';
 import ProcessModal from '@/components/inbox/ProcessModal';
 import LoadingState from '@/components/ui/LoadingState';

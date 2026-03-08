@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import AppShell from '@/components/layout/AppShell';
 import { useTasks } from '@/hooks/useTasks';
-import { useInbox } from '@/hooks/useInbox';
+import { useInbox } from '@/components/providers/InboxProvider';
 import { useStats } from '@/hooks/useStats';
 import { useAreas } from '@/hooks/useAreas';
 import TaskRow from '@/components/tasks/TaskRow';
