@@ -53,7 +53,7 @@ export function useInbox() {
       try {
         const { data: created, error: err } = await supabase
           .from('inbox')
-          .insert({ raw_text: rawText, source: 'quick_capture' })
+          .insert({ raw_text: rawText, source: 'quick_capture', user_id: session.user.id })
           .select()
           .single();
         if (err) throw err;
@@ -95,6 +95,7 @@ export function useInbox() {
             priority,
             project_id: taskData.project_id || null,
             due_date: taskData.due_date || null,
+            user_id: session!.user.id,
           })
           .select()
           .single();
@@ -114,7 +115,7 @@ export function useInbox() {
         setError(err instanceof Error ? err.message : 'Failed to process to task');
       }
     },
-    [supabase, items]
+    [supabase, session, items]
   );
 
   const processToIdea = useCallback(
@@ -132,6 +133,7 @@ export function useInbox() {
             title: ideaData.title,
             area_id: ideaData.area_id || null,
             body: ideaData.body || '',
+            user_id: session!.user.id,
           })
           .select()
           .single();
@@ -151,7 +153,7 @@ export function useInbox() {
         setError(err instanceof Error ? err.message : 'Failed to process to idea');
       }
     },
-    [supabase, items]
+    [supabase, session, items]
   );
 
   const processToProject = useCallback(
@@ -169,6 +171,7 @@ export function useInbox() {
             title: projectData.title,
             area_id: projectData.area_id,
             description: projectData.description || '',
+            user_id: session!.user.id,
           })
           .select()
           .single();
@@ -188,7 +191,7 @@ export function useInbox() {
         setError(err instanceof Error ? err.message : 'Failed to process to project');
       }
     },
-    [supabase, items]
+    [supabase, session, items]
   );
 
   const trash = useCallback(

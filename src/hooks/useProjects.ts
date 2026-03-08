@@ -25,29 +25,26 @@ export function useProjects(filters?: {
         .order('priority', { ascending: true })
         .order('updated_at', { ascending: false });
 
-      const { data, error: err } = await query;
-      if (err) throw err;
+      // Fetch projects and all task counts in parallel
+      const [projectsRes, tasksRes] = await Promise.all([
+        query,
+        supabase.from('tasks').select('project_id, status').not('project_id', 'is', null),
+      ]);
+      if (projectsRes.error) throw projectsRes.error;
+      if (tasksRes.error) throw tasksRes.error;
 
-      const projectIds = (data || []).map((p) => p.id);
+      const data = projectsRes.data || [];
+      const projectIds = new Set(data.map((p) => p.id));
       const taskCounts: Record<string, { total: number; done: number }> = {};
 
-      if (projectIds.length > 0) {
-        // Batch fetch tasks for all projects to avoid N+1
-        const { data: taskData, error: taskErr } = await supabase
-          .from('tasks')
-          .select('project_id, status')
-          .in('project_id', projectIds);
-        if (taskErr) throw taskErr;
-
-        for (const t of taskData || []) {
-          if (!t.project_id) continue;
-          if (!taskCounts[t.project_id]) taskCounts[t.project_id] = { total: 0, done: 0 };
-          if (t.status !== 'cancelled') taskCounts[t.project_id].total++;
-          if (t.status === 'done') taskCounts[t.project_id].done++;
-        }
+      for (const t of tasksRes.data || []) {
+        if (!t.project_id || !projectIds.has(t.project_id)) continue;
+        if (!taskCounts[t.project_id]) taskCounts[t.project_id] = { total: 0, done: 0 };
+        if (t.status !== 'cancelled') taskCounts[t.project_id].total++;
+        if (t.status === 'done') taskCounts[t.project_id].done++;
       }
 
-      const enriched: Project[] = (data || []).map((p) => ({
+      const enriched: Project[] = data.map((p) => ({
         ...p,
         task_count: taskCounts[p.id]?.total || 0,
         completed_task_count: taskCounts[p.id]?.done || 0,
@@ -102,6 +99,7 @@ export function useProjects(filters?: {
             description: data.description || '',
             priority: data.priority || 2,
             deadline: data.deadline || null,
+            user_id: session.user.id,
           })
           .select()
           .single();

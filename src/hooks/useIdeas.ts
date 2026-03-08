@@ -69,6 +69,7 @@ export function useIdeas(filters?: {
             body: data.body || '',
             area_id: data.area_id || null,
             rating: data.rating || 0,
+            user_id: session.user.id,
           })
           .select()
           .single();

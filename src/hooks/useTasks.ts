@@ -96,6 +96,7 @@ export function useTasks(filters?: {
             due_date: data.due_date || null,
             description: data.description || '',
             estimated_minutes: data.estimated_minutes || null,
+            user_id: session.user.id,
           })
           .select()
           .single();

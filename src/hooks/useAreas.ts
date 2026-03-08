@@ -63,7 +63,7 @@ export function useAreas() {
       try {
         const { data: created, error: err } = await supabase
           .from('areas')
-          .insert({ ...data, sort_order: maxOrder + 1 })
+          .insert({ ...data, sort_order: maxOrder + 1, user_id: session.user.id })
           .select()
           .single();
         if (err) throw err;
