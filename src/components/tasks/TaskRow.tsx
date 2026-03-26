@@ -1,6 +1,7 @@
 'use client';
 
-import { Pin } from 'lucide-react';
+import { Pin, Play } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import type { Task, Area } from '@/lib/types';
 import { PRIORITY_COLORS } from '@/lib/constants';
 import { isOverdue, truncate, prioritySymbol } from '@/lib/helpers';
@@ -23,6 +24,7 @@ const STATUS_ICONS: Record<Task['status'], string> = {
 };
 
 export default function TaskRow({ task, onComplete, onTogglePin, onStatusChange, onClick, areas }: TaskRowProps) {
+  const router = useRouter();
   const area = areas?.find((a) => a.id === task.area_id);
   const overdue = isOverdue(task.due_date);
   const priorityColor = PRIORITY_COLORS[task.priority] || PRIORITY_COLORS[3];
@@ -87,6 +89,20 @@ export default function TaskRow({ task, onComplete, onTogglePin, onStatusChange,
       >
         {truncate(task.title, 50)}
       </span>
+
+      {/* Focus button */}
+      {(task.status === 'todo' || task.status === 'in_progress') && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            router.push(`/focus?task=${task.id}`);
+          }}
+          className="shrink-0 text-text-muted/0 group-hover:text-text-muted hover:!text-accent transition-all duration-150"
+          title="Focus on this task"
+        >
+          <Play size={14} />
+        </button>
+      )}
 
       {/* Pin indicator */}
       {task.is_pinned && (

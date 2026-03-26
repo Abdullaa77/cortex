@@ -1,11 +1,16 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useInbox } from '@/components/providers/InboxProvider';
+import { useSupabase } from '@/components/providers/SupabaseProvider';
+import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
+import CommandPalette from '@/components/CommandPalette';
 import Header from './Header';
 import Sidebar from './Sidebar';
 import MobileNav from './MobileNav';
 import QuickCapture from './QuickCapture';
+
+type PaletteMode = 'search' | 'create_task' | 'create_idea' | 'create_project';
 
 interface AppShellProps {
   children: ReactNode;
@@ -13,7 +18,47 @@ interface AppShellProps {
 
 export default function AppShell({ children }: AppShellProps) {
   const inbox = useInbox();
+  const { supabase, session } = useSupabase();
   const [showMobileCapture, setShowMobileCapture] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [paletteMode, setPaletteMode] = useState<PaletteMode>('search');
+  const [reviewDue, setReviewDue] = useState(false);
+
+  // Check if weekly review is due
+  useEffect(() => {
+    if (!session?.user) return;
+    supabase
+      .from('weekly_reviews')
+      .select('week_start')
+      .order('week_start', { ascending: false })
+      .limit(1)
+      .then(({ data }) => {
+        if (!data || data.length === 0) {
+          setReviewDue(true);
+          return;
+        }
+        const lastReviewDate = new Date(data[0].week_start);
+        const daysSince = (Date.now() - lastReviewDate.getTime()) / (1000 * 60 * 60 * 24);
+        setReviewDue(daysSince >= 7);
+      });
+  }, [supabase, session?.user]);
+
+  const openPalette = (mode: PaletteMode = 'search') => {
+    setPaletteMode(mode);
+    setPaletteOpen(true);
+  };
+
+  const shortcuts = useMemo(
+    () => ({
+      'ctrl+k': () => openPalette('search'),
+      'ctrl+n': () => openPalette('create_task'),
+      'ctrl+i': () => openPalette('create_idea'),
+      'escape': () => setPaletteOpen(false),
+    }),
+    []
+  );
+
+  useKeyboardShortcuts(shortcuts, !paletteOpen);
 
   const handleCapture = async (text: string) => {
     await inbox.capture(text);
@@ -24,7 +69,7 @@ export default function AppShell({ children }: AppShellProps) {
       <Header />
 
       <div className="flex flex-1 overflow-hidden">
-        <Sidebar inboxCount={inbox.unprocessedCount} />
+        <Sidebar inboxCount={inbox.unprocessedCount} reviewDue={reviewDue} />
 
         <main className="flex-1 overflow-y-auto bg-grid">
           {children}
@@ -60,6 +105,13 @@ export default function AppShell({ children }: AppShellProps) {
           </div>
         </div>
       )}
+
+      {/* Command Palette */}
+      <CommandPalette
+        isOpen={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        initialMode={paletteMode}
+      />
     </div>
   );
 }

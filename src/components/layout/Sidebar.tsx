@@ -8,11 +8,13 @@ import {
   FolderKanban,
   Layout,
   Lightbulb,
+  CalendarCheck,
   Settings,
 } from 'lucide-react';
 
 interface SidebarProps {
   inboxCount: number;
+  reviewDue?: boolean;
 }
 
 const navItems = [
@@ -21,9 +23,10 @@ const navItems = [
   { href: '/projects', label: 'Projects', icon: FolderKanban },
   { href: '/areas', label: 'Areas', icon: Layout },
   { href: '/ideas', label: 'Ideas', icon: Lightbulb },
+  { href: '/review', label: 'Review', icon: CalendarCheck },
 ];
 
-export default function Sidebar({ inboxCount }: SidebarProps) {
+export default function Sidebar({ inboxCount, reviewDue }: SidebarProps) {
   const pathname = usePathname();
 
   const isActive = (href: string) => {
@@ -65,6 +68,9 @@ export default function Sidebar({ inboxCount }: SidebarProps) {
                 >
                   {inboxCount}
                 </span>
+              )}
+              {item.href === '/review' && reviewDue && (
+                <span className="ml-auto w-2 h-2 rounded-full bg-accent shadow-[0_0_6px_rgba(0,255,136,0.5)]" />
               )}
             </Link>
           );

@@ -73,3 +73,30 @@ export interface InboxItem {
   processed_to: 'task' | 'idea' | 'project' | 'trashed' | null;
   processed_ref_id: string | null;
 }
+
+export interface WeeklyReview {
+  id: string;
+  user_id: string;
+  week_start: string;
+  tasks_completed: number;
+  tasks_created: number;
+  projects_reviewed: number;
+  inbox_processed: number;
+  ideas_captured: number;
+  reflection: string;
+  energy_rating: number | null;
+  completed_at: string;
+  created_at: string;
+}
+
+export interface FocusSession {
+  id: string;
+  user_id: string;
+  task_id: string | null;
+  task_title: string;
+  started_at: string;
+  ended_at: string | null;
+  duration_seconds: number | null;
+  outcome: 'completed' | 'paused' | 'skipped' | null;
+  created_at: string;
+}
