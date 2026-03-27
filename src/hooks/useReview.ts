@@ -42,14 +42,15 @@ export function useReview() {
   const [reflection, setReflection] = useState('');
   const [energyRating, setEnergyRating] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [lastReview, setLastReview] = useState<WeeklyReview | null>(null);
-
-  const thisMonday = getMonday(new Date()).toISOString();
-  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
   const fetchWeekData = useCallback(async () => {
     if (!session?.user) return;
     setLoading(true);
+    setError(null);
+
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
     try {
       const [
@@ -140,13 +141,18 @@ export function useReview() {
         areasWithActivity,
       });
 
-      setLastReview(lastReviewRes.data?.[0] || null);
+      if (lastReviewRes.error) {
+        console.warn('weekly_reviews query failed:', lastReviewRes.error.message);
+      } else {
+        setLastReview(lastReviewRes.data?.[0] || null);
+      }
     } catch (err) {
       console.error('Failed to fetch review data:', err);
+      setError(err instanceof Error ? err.message : 'Failed to fetch review data');
     } finally {
       setLoading(false);
     }
-  }, [supabase, session?.user, sevenDaysAgo]);
+  }, [supabase, session?.user]);
 
   useEffect(() => {
     fetchWeekData();
@@ -174,10 +180,11 @@ export function useReview() {
     });
   }, [supabase, session?.user, weekData, reflection, energyRating]);
 
+  const thisMonday = getMonday(new Date());
   const hasReviewedThisWeek =
-    lastReview?.week_start === thisMonday.slice(0, 10) ||
+    lastReview?.week_start === thisMonday.toISOString().slice(0, 10) ||
     (lastReview?.week_start
-      ? getMonday(new Date(lastReview.week_start)).getTime() === getMonday(new Date()).getTime()
+      ? getMonday(new Date(lastReview.week_start)).getTime() === thisMonday.getTime()
       : false);
 
   return {
@@ -186,6 +193,7 @@ export function useReview() {
     reflection,
     energyRating,
     loading,
+    error,
     lastReview,
     hasReviewedThisWeek,
     fetchWeekData,
