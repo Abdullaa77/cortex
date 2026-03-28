@@ -33,6 +33,8 @@ const QUICK_ACTIONS: SearchResult[] = [
   { id: 'nav_projects', type: 'project', title: 'Go to Projects', icon: '◈', href: '/projects' },
   { id: 'nav_areas', type: 'area', title: 'Go to Areas', icon: '⊞', href: '/areas' },
   { id: 'nav_ideas', type: 'idea', title: 'Go to Ideas', icon: '☆', href: '/ideas' },
+  { id: 'nav_routines', type: 'area', title: 'Go to Routines', icon: '✓', href: '/routines' },
+  { id: 'nav_edit_routines', type: 'area', title: 'Go to Edit Routines', icon: '⚙', href: '/routines/edit' },
 ];
 
 const SHORTCUT_HINTS: Record<string, string> = {

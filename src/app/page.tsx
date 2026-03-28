@@ -6,6 +6,9 @@ import { useTasks } from '@/hooks/useTasks';
 import { useInbox } from '@/components/providers/InboxProvider';
 import { useStats } from '@/hooks/useStats';
 import { useAreas } from '@/hooks/useAreas';
+import { useRoutines } from '@/hooks/useRoutines';
+import { useHabits } from '@/hooks/useHabits';
+import { useDailyLog } from '@/hooks/useDailyLog';
 import TaskRow from '@/components/tasks/TaskRow';
 import TaskDetail from '@/components/tasks/TaskDetail';
 import TaskForm from '@/components/tasks/TaskForm';
@@ -19,6 +22,9 @@ export default function TerminalPage() {
   const inbox = useInbox();
   const { stats, fetchStats } = useStats();
   const { areas } = useAreas();
+  const { routines } = useRoutines();
+  const { habits } = useHabits();
+  const { disciplineScore } = useDailyLog(routines, habits);
 
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [showTaskForm, setShowTaskForm] = useState(false);
@@ -84,6 +90,54 @@ export default function TerminalPage() {
                 className="mt-2 inline-block font-mono text-xs text-accent hover:text-accent-dim transition-colors duration-150"
               >
                 Process All →
+              </Link>
+            </div>
+          </>
+        )}
+
+        {/* DISCIPLINE widget */}
+        {disciplineScore.total > 0 && (
+          <>
+            <SectionHeader title="DISCIPLINE" />
+            <div className="mb-6 flex flex-wrap gap-x-4 gap-y-1 font-mono text-xs text-text-muted">
+              <span>
+                Today: <span className="text-accent">{disciplineScore.percentage}%</span>
+              </span>
+              <span className="text-accent/20">|</span>
+              <span>
+                Done: <span className="text-accent">{disciplineScore.completed}/{disciplineScore.total}</span>
+              </span>
+              {routines.filter((r) => r.is_prayer).length > 0 && (() => {
+                const prayerRoutine = routines.find((r) => r.is_prayer);
+                if (!prayerRoutine) return null;
+                const prayerSteps = prayerRoutine.steps || [];
+                return (
+                  <>
+                    <span className="text-accent/20">|</span>
+                    <span>
+                      Prayers: <span className="text-accent">{prayerSteps.length}/5</span>
+                    </span>
+                  </>
+                );
+              })()}
+              <Link
+                href="/routines"
+                className="ml-auto text-accent hover:text-accent-dim transition-colors"
+              >
+                View Routines →
+              </Link>
+            </div>
+          </>
+        )}
+        {disciplineScore.total === 0 && routines.length === 0 && (
+          <>
+            <SectionHeader title="DISCIPLINE" />
+            <div className="mb-6">
+              <Link
+                href="/routines"
+                className="font-mono text-xs text-accent hover:text-accent-dim transition-colors"
+              >
+                Set up your routines →
               </Link>
             </div>
           </>

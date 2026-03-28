@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Inbox, FolderKanban, Lightbulb, CalendarCheck, Plus } from 'lucide-react';
+import { Home, Inbox, FolderKanban, ListChecks, Plus } from 'lucide-react';
 
 interface MobileNavProps {
   onCapture: () => void;
@@ -10,10 +10,9 @@ interface MobileNavProps {
 
 const tabs = [
   { href: '/', label: 'Home', icon: Home },
+  { href: '/routines', label: 'Routines', icon: ListChecks },
   { href: '/inbox', label: 'Inbox', icon: Inbox },
   { href: '/projects', label: 'Projects', icon: FolderKanban },
-  { href: '/ideas', label: 'Ideas', icon: Lightbulb },
-  { href: '/review', label: 'Review', icon: CalendarCheck },
 ];
 
 export default function MobileNav({ onCapture }: MobileNavProps) {

@@ -9,16 +9,19 @@ import {
   Layout,
   Lightbulb,
   CalendarCheck,
+  ListChecks,
   Settings,
 } from 'lucide-react';
 
 interface SidebarProps {
   inboxCount: number;
   reviewDue?: boolean;
+  disciplinePercent?: number;
 }
 
 const navItems = [
   { href: '/', label: 'Terminal', icon: Home },
+  { href: '/routines', label: 'Routines', icon: ListChecks },
   { href: '/inbox', label: 'Inbox', icon: Inbox },
   { href: '/projects', label: 'Projects', icon: FolderKanban },
   { href: '/areas', label: 'Areas', icon: Layout },
@@ -26,7 +29,7 @@ const navItems = [
   { href: '/review', label: 'Review', icon: CalendarCheck },
 ];
 
-export default function Sidebar({ inboxCount, reviewDue }: SidebarProps) {
+export default function Sidebar({ inboxCount, reviewDue, disciplinePercent }: SidebarProps) {
   const pathname = usePathname();
 
   const isActive = (href: string) => {
@@ -67,6 +70,24 @@ export default function Sidebar({ inboxCount, reviewDue }: SidebarProps) {
                   key={inboxCount}
                 >
                   {inboxCount}
+                </span>
+              )}
+              {item.href === '/routines' && disciplinePercent !== undefined && disciplinePercent < 100 && (
+                <span
+                  className="ml-auto font-mono text-[10px] font-bold"
+                  style={{
+                    color:
+                      disciplinePercent >= 67 ? '#00FF88'
+                      : disciplinePercent >= 34 ? '#F59E0B'
+                      : '#EF4444',
+                  }}
+                >
+                  {disciplinePercent}%
+                </span>
+              )}
+              {item.href === '/routines' && disciplinePercent === 100 && (
+                <span className="ml-auto font-mono text-[10px] font-bold text-accent text-glow-sm">
+                  100%
                 </span>
               )}
               {item.href === '/review' && reviewDue && (

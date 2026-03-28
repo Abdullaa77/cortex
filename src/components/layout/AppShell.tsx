@@ -23,6 +23,36 @@ export default function AppShell({ children }: AppShellProps) {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [paletteMode, setPaletteMode] = useState<PaletteMode>('search');
   const [reviewDue, setReviewDue] = useState(false);
+  const [disciplinePercent, setDisciplinePercent] = useState<number | undefined>(undefined);
+
+  // Fetch today's discipline score for sidebar badge
+  useEffect(() => {
+    if (!session?.user) return;
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+    Promise.all([
+      supabase
+        .from('routine_steps')
+        .select('id', { count: 'exact', head: true })
+        .eq('is_archived', false),
+      supabase
+        .from('habits')
+        .select('id', { count: 'exact', head: true })
+        .eq('is_archived', false),
+      supabase
+        .from('daily_log')
+        .select('id', { count: 'exact', head: true })
+        .eq('log_date', todayStr)
+        .eq('completed', true),
+    ]).then(([routineSteps, habitsRes, logRes]) => {
+      const total = (routineSteps.count || 0) + (habitsRes.count || 0);
+      const completed = logRes.count || 0;
+      if (total > 0) {
+        setDisciplinePercent(Math.round((completed / total) * 100));
+      }
+    });
+  }, [supabase, session?.user]);
 
   // Check if weekly review is due
   useEffect(() => {
@@ -69,7 +99,7 @@ export default function AppShell({ children }: AppShellProps) {
       <Header />
 
       <div className="flex flex-1 overflow-hidden">
-        <Sidebar inboxCount={inbox.unprocessedCount} reviewDue={reviewDue} />
+        <Sidebar inboxCount={inbox.unprocessedCount} reviewDue={reviewDue} disciplinePercent={disciplinePercent} />
 
         <main className="flex-1 overflow-y-auto bg-grid">
           {children}
