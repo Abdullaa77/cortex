@@ -100,3 +100,68 @@ export interface FocusSession {
   outcome: 'completed' | 'paused' | 'skipped' | null;
   created_at: string;
 }
+
+export interface Routine {
+  id: string;
+  user_id: string;
+  name: string;
+  icon: string;
+  color: string;
+  time_of_day: 'morning' | 'afternoon' | 'evening' | 'anytime';
+  sort_order: number;
+  is_prayer: boolean;
+  is_archived: boolean;
+  created_at: string;
+  updated_at: string;
+  // Joined
+  steps?: RoutineStep[];
+}
+
+export interface RoutineStep {
+  id: string;
+  routine_id: string;
+  user_id: string;
+  name: string;
+  sort_order: number;
+  is_archived: boolean;
+  created_at: string;
+}
+
+export interface Habit {
+  id: string;
+  user_id: string;
+  name: string;
+  icon: string;
+  color: string;
+  track_type: 'checkbox' | 'number';
+  target_value: number | null;
+  unit: string | null;
+  sort_order: number;
+  is_archived: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DailyLogEntry {
+  id: string;
+  user_id: string;
+  log_date: string;
+  routine_step_id: string | null;
+  habit_id: string | null;
+  completed: boolean;
+  value: number | null;
+  completed_at: string | null;
+  created_at: string;
+}
+
+export interface DisciplineScore {
+  total: number;
+  completed: number;
+  percentage: number;
+}
+
+export interface StreakInfo {
+  itemId: string;
+  itemType: 'step' | 'habit';
+  currentStreak: number;
+}

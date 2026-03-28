@@ -37,6 +37,18 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
             p_user_id: session.user.id,
           });
         }
+
+        // Seed default routines & habits on first login
+        const { count: routineCount } = await supabase
+          .from('routines')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', session.user.id);
+
+        if (routineCount === 0) {
+          await supabase.rpc('seed_default_routines', {
+            p_user_id: session.user.id,
+          });
+        }
       }
     };
 
