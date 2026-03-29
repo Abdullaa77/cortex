@@ -21,19 +21,7 @@ export function useHabits() {
         .order('sort_order');
       if (err) throw err;
 
-      if (data.length === 0) {
-        // Seed defaults (seeds both routines and habits)
-        await supabase.rpc('seed_default_routines', { p_user_id: session.user.id });
-        const { data: seeded, error: seedErr } = await supabase
-          .from('habits')
-          .select('*')
-          .eq('is_archived', false)
-          .order('sort_order');
-        if (seedErr) throw seedErr;
-        setHabits(seeded || []);
-      } else {
-        setHabits(data);
-      }
+      setHabits(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch habits');
     } finally {

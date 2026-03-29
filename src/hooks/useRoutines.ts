@@ -21,19 +21,6 @@ export function useRoutines() {
         .order('sort_order');
       if (rErr) throw rErr;
 
-      if (routineData.length === 0) {
-        // Seed defaults on first use
-        await supabase.rpc('seed_default_routines', { p_user_id: session.user.id });
-        const { data: seeded, error: seedErr } = await supabase
-          .from('routines')
-          .select('*')
-          .eq('is_archived', false)
-          .order('sort_order');
-        if (seedErr) throw seedErr;
-        routineData.length = 0;
-        seeded?.forEach((r) => routineData.push(r));
-      }
-
       // Batch fetch all steps for these routines
       const routineIds = routineData.map((r) => r.id);
       const { data: stepData, error: sErr } = await supabase
