@@ -123,6 +123,24 @@ describe('generated SQL', () => {
     assert.ok(!sql.includes("'mom's"), 'an unescaped apostrophe reached the SQL');
   });
 
+  test('seeds categories inline, because the guarded RPC cannot run in the SQL editor', () => {
+    // seed_finance_categories() asserts auth.uid() = p_user_id, and auth.uid()
+    // is NULL when the SQL editor runs as postgres — it would refuse itself.
+    // Without categories, every row imports with category_id = NULL.
+    assert.match(sql, /INSERT INTO finance_categories \(user_id, slug, name, icon, color, kind, sort_order\) VALUES/);
+    assert.match(sql, /ON CONFLICT \(user_id, slug\) DO NOTHING;/);
+    assert.match(sql, /\(v_user, 'groceries', 'Groceries', /);
+    assert.match(sql, /\(v_user, 'transfer', 'Transfer \/ debt', /);
+    assert.equal((sql.match(/\(v_user, '[a-z-]+', '/g) ?? []).length, 17);
+  });
+
+  test('the category seed comes before the transactions that reference it', () => {
+    assert.ok(
+      sql.indexOf('INSERT INTO finance_categories') <
+        sql.indexOf('INSERT INTO transactions')
+    );
+  });
+
   test('resolves category and area by lookup, never by hardcoded id', () => {
     assert.match(sql, /SELECT id FROM finance_categories WHERE user_id = v_user AND slug =/);
     assert.match(sql, /SELECT id INTO v_area FROM areas WHERE user_id = v_user AND name = 'Finance'/);
