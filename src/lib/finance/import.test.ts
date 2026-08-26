@@ -26,6 +26,21 @@ describe('import', () => {
       assert.match(row.occurredAt, /^2026-0[78]/, row.rawInput);
   });
 
+  test("imported rows never claim a day they don't have", () => {
+    // Every row lands on the 1st, so date_precision must say 'month' or a
+    // daily view will read a month of spending as having happened on day one.
+    for (const row of summary.rows) {
+      assert.equal(row.datePrecision, 'month', row.rawInput);
+      assert.match(row.occurredAt, /^2026-0[78]-01T/, row.rawInput);
+    }
+  });
+
+  test('date_precision reaches the generated SQL', () => {
+    const sql = toSql(summary, '00000000-0000-4000-8000-000000002026');
+    assert.match(sql, /date_precision, import_batch_id\) VALUES \(/);
+    assert.equal((sql.match(/'month', v_batch\);/g) ?? []).length, summary.rows.length);
+  });
+
   test('August spend is the number the Phase 1 report published', () => {
     assert.equal(formatMinor(august!.spendMinor), '5,996,954.15');
   });

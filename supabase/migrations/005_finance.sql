@@ -60,6 +60,15 @@ CREATE TABLE transactions (
   parse_flags TEXT[] DEFAULT '{}',
 
   occurred_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  -- How much of occurred_at is real. Imported rows come from notes with no
+  -- per-line date — only a month header — so they land on the 1st and say
+  -- 'month'. Anything typed into the app knows its day and says 'day'.
+  -- Without this, a daily view built three months from now stacks every
+  -- imported row on the 1st and reads as if a month's spending happened on
+  -- day one. The column is what lets the code see the difference instead of
+  -- relying on someone remembering the convention.
+  date_precision TEXT NOT NULL DEFAULT 'day'
+    CHECK (date_precision IN ('day', 'month')),
   import_batch_id UUID,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()

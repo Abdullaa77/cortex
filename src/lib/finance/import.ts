@@ -8,8 +8,9 @@
  * section headers. So a row's month and its position within that month are
  * real, and its day is not. Rather than invent days, every row lands on the
  * first of its month, offset by one minute per line to preserve the order it
- * was written in. Monthly rollups are exact; a daily view of imported rows is
- * meaningless by construction, and should say so rather than draw a chart.
+ * was written in, and carries date_precision = 'month'. Monthly rollups are
+ * exact; a daily view must check date_precision and say it has no day data for
+ * these rows rather than stacking a month of spending onto the 1st.
  */
 
 import { parseLine, type ParseResult } from './parse.ts';
@@ -26,6 +27,8 @@ export interface ImportRow {
   needsReview: boolean;
   parseFlags: string[];
   occurredAt: string;
+  /** How much of occurredAt is real. Imported rows only know their month. */
+  datePrecision: 'day' | 'month';
   /** Set when a human decided this row, so it reads as a decision not a guess. */
   note?: string;
 }
@@ -132,6 +135,8 @@ export function buildImport(text: string, year: number): ImportSummary {
         needsReview: confirmed ? false : !parsed.ok || slug === null,
         parseFlags: flags,
         occurredAt: occurredAt(year, month, indexInMonth),
+        // The notes carry no per-line date. Never claim a day we don't have.
+        datePrecision: 'month',
         note: confirmed?.note,
       });
       indexInMonth++;
@@ -209,12 +214,13 @@ export function toSql(summary: ImportSummary, batchId: string): string {
       : `'{}'::TEXT[]`;
     out.push(
       '  INSERT INTO transactions (user_id, area_id, category_id, direction, amount_minor, ' +
-        'currency, comment, raw_input, category_source, needs_review, parse_flags, occurred_at, import_batch_id) VALUES ('
+        'currency, comment, raw_input, category_source, needs_review, parse_flags, occurred_at, ' +
+        'date_precision, import_batch_id) VALUES ('
     );
     out.push(
       `    v_user, v_area, ${category}, ${q(row.direction)}, ${row.amountMinor}, ` +
         `${q(row.currency)}, ${q(row.comment)}, ${q(row.rawInput)}, ${q(row.categorySource)}, ` +
-        `${row.needsReview}, ${flags}, ${q(row.occurredAt)}, v_batch);`
+        `${row.needsReview}, ${flags}, ${q(row.occurredAt)}, ${q(row.datePrecision)}, v_batch);`
     );
   }
 
