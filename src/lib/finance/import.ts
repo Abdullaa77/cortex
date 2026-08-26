@@ -14,7 +14,7 @@
  */
 
 import { parseLine, type ParseResult } from './parse.ts';
-import { categorize, CATEGORY_BY_SLUG } from './categorize.ts';
+import { categorize, CATEGORY_BY_SLUG, CATEGORIES } from './categorize.ts';
 
 export interface ImportRow {
   direction: 'expense' | 'income';
@@ -201,6 +201,21 @@ export function toSql(summary: ImportSummary, batchId: string): string {
   out.push('  v_area UUID;');
   out.push('BEGIN');
   out.push("  SELECT id INTO v_area FROM areas WHERE user_id = v_user AND name = 'Finance' LIMIT 1;");
+  out.push('');
+  out.push('  -- Seed the categories inline rather than calling');
+  out.push('  -- seed_finance_categories(): that function guards on auth.uid(), which is');
+  out.push('  -- NULL in the SQL editor, so it would refuse itself here. Without');
+  out.push('  -- categories every row below would import with category_id = NULL.');
+  out.push('  -- ON CONFLICT makes this safe to re-run and safe if the app already seeded.');
+  out.push('  INSERT INTO finance_categories (user_id, slug, name, icon, color, kind, sort_order) VALUES');
+  out.push(
+    CATEGORIES.map(
+      (c, i) =>
+        `    (v_user, ${q(c.slug)}, ${q(c.name)}, ${q(c.icon)}, ${q(c.color)}, ${q(c.kind)}, ${i})`
+    ).join(',\n')
+  );
+  out.push('  ON CONFLICT (user_id, slug) DO NOTHING;');
+  out.push('');
   out.push('  DELETE FROM transactions WHERE user_id = v_user AND import_batch_id = v_batch;');
   out.push('');
 
