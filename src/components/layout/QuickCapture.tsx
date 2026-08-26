@@ -3,7 +3,8 @@
 import { useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 
 interface QuickCaptureProps {
-  onCapture: (text: string) => Promise<void>;
+  /** Awaited before the field clears. Any resolved value is ignored here. */
+  onCapture: (text: string) => Promise<unknown>;
   isModal?: boolean;
 }
 
