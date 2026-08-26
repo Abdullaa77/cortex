@@ -86,12 +86,7 @@ export default function ReviewPage() {
             {STEP_NAMES.map((name, i) => (
               <div key={name} className="flex items-center">
                 <button
-                  onClick={() => {
-                    if (i <= review.currentStep) {
-                      // Allow going back to completed steps
-                      while (review.currentStep > i) review.prevStep();
-                    }
-                  }}
+                  onClick={() => review.goToStep(i)}
                   className={`w-3 h-3 rounded-full border-2 transition-all ${
                     i < review.currentStep
                       ? 'bg-accent border-accent'

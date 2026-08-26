@@ -160,6 +160,10 @@ export function useReview() {
 
   const nextStep = () => setCurrentStep((s) => Math.min(s + 1, 4));
   const prevStep = () => setCurrentStep((s) => Math.max(s - 1, 0));
+  // Jump straight to a step. Only allows going back to an already-completed
+  // step — forward jumps are ignored so steps can't be skipped.
+  const goToStep = (step: number) =>
+    setCurrentStep((s) => (step >= 0 && step < s ? step : s));
 
   const completeReview = useCallback(async () => {
     if (!session?.user) return;
@@ -199,6 +203,7 @@ export function useReview() {
     fetchWeekData,
     nextStep,
     prevStep,
+    goToStep,
     setReflection,
     setEnergyRating,
     completeReview,
