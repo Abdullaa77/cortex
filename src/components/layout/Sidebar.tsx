@@ -10,6 +10,7 @@ import {
   Lightbulb,
   CalendarCheck,
   ListChecks,
+  Wallet,
   Settings,
 } from 'lucide-react';
 
@@ -26,6 +27,7 @@ const navItems = [
   { href: '/projects', label: 'Projects', icon: FolderKanban },
   { href: '/areas', label: 'Areas', icon: Layout },
   { href: '/ideas', label: 'Ideas', icon: Lightbulb },
+  { href: '/finance', label: 'Finance', icon: Wallet },
   { href: '/review', label: 'Review', icon: CalendarCheck },
 ];
 

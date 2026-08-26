@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Inbox, FolderKanban, ListChecks, Plus } from 'lucide-react';
+import { Home, Inbox, FolderKanban, ListChecks, Wallet, Plus } from 'lucide-react';
 
 interface MobileNavProps {
   onCapture: () => void;
@@ -13,6 +13,7 @@ const tabs = [
   { href: '/routines', label: 'Routines', icon: ListChecks },
   { href: '/inbox', label: 'Inbox', icon: Inbox },
   { href: '/projects', label: 'Projects', icon: FolderKanban },
+  { href: '/finance', label: 'Money', icon: Wallet },
 ];
 
 export default function MobileNav({ onCapture }: MobileNavProps) {
