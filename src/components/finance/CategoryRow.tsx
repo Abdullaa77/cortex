@@ -9,6 +9,10 @@ interface CategoryRowProps {
   scaleMinor: number;
   earlierLabel: string;
   laterLabel: string;
+  earlierKey: string;
+  laterKey: string;
+  /** Opens the transactions behind whichever month's bar was clicked. */
+  onSelect: (monthKey: string) => void;
 }
 
 export default function CategoryRow({
@@ -16,6 +20,9 @@ export default function CategoryRow({
   scaleMinor,
   earlierLabel,
   laterLabel,
+  earlierKey,
+  laterKey,
+  onSelect,
 }: CategoryRowProps) {
   const { name, icon, color, earlierMinor, laterMinor, deltaMinor, inBoth } = category;
   const width = (minor: number) => (scaleMinor > 0 ? (minor / scaleMinor) * 100 : 0);
@@ -47,6 +54,7 @@ export default function CategoryRow({
           minor={earlierMinor}
           widthPercent={width(earlierMinor)}
           color={color}
+          onSelect={() => onSelect(earlierKey)}
           dim
         />
         <MonthBar
@@ -54,27 +62,46 @@ export default function CategoryRow({
           minor={laterMinor}
           widthPercent={width(laterMinor)}
           color={color}
+          onSelect={() => onSelect(laterKey)}
         />
       </div>
     </div>
   );
 }
 
+/**
+ * One month's bar. Clickable when there is something behind it — a zero is a
+ * statement that nothing was spent, and there is no list to open for it.
+ */
 function MonthBar({
   label,
   minor,
   widthPercent,
   color,
+  onSelect,
   dim = false,
 }: {
   label: string;
   minor: number;
   widthPercent: number;
   color: string;
+  onSelect: () => void;
   dim?: boolean;
 }) {
+  const Tag = minor > 0 ? 'button' : 'div';
+
   return (
-    <div className="flex items-center gap-2">
+    <Tag
+      {...(minor > 0
+        ? {
+            type: 'button' as const,
+            onClick: onSelect,
+            title: `Show the ${label.toLowerCase()} transactions`,
+          }
+        : {})}
+      className={`-mx-1 flex w-[calc(100%+0.5rem)] items-center gap-2 rounded px-1 text-left
+        ${minor > 0 ? 'transition-colors hover:bg-surface2/50' : ''}`}
+    >
       <span className="w-8 shrink-0 font-mono text-[10px] uppercase tracking-wider text-text-muted/70">
         {label.slice(0, 3)}
       </span>
@@ -95,6 +122,6 @@ function MonthBar({
       >
         {minor === 0 ? '—' : formatMinor(minor)}
       </span>
-    </div>
+    </Tag>
   );
 }

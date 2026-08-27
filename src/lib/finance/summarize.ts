@@ -1,5 +1,5 @@
 /**
- * Aggregate transaction rows into the month-beside-month summary.
+ * Aggregate transaction rows into month totals and category breakdowns.
  *
  * Pure, so it can be checked against the real corpus without a browser or a
  * session. The hook does the fetching and calls this.
@@ -51,8 +51,19 @@ export interface CategoryComparison {
   inBoth: boolean;
 }
 
+/** One category's spend inside a single month. */
+export interface CategorySlice {
+  slug: string;
+  name: string;
+  icon: string;
+  color: string;
+  minor: number;
+  /** Share of that month's spend, 0–1. Zero when the month spent nothing. */
+  share: number;
+}
+
 export interface FinanceSummary {
-  /** Up to two months, oldest first. */
+  /** The months being compared, oldest first. Up to two. */
   months: MonthTotals[];
   inBoth: CategoryComparison[];
   oneMonthOnly: CategoryComparison[];
@@ -78,62 +89,184 @@ export const EMPTY_SUMMARY: FinanceSummary = {
   totalRows: 0,
 };
 
-export function summarize(rows: TransactionRow[]): FinanceSummary {
-  if (rows.length === 0) return EMPTY_SUMMARY;
+/** The minimum a row needs to expose to be classified and bucketed. */
+export interface ClassifiableRow {
+  direction: 'expense' | 'income';
+  occurred_at: string;
+  finance_categories: JoinedCategory | null;
+}
 
-  // The two most recent months that actually have rows — never hardcoded, so
-  // this keeps working in September without a code change.
-  const monthKeys = [...new Set(rows.map((r) => monthKey(r.occurred_at)))].sort().slice(-2);
+export type RowClass = 'transfer-in' | 'transfer-out' | 'income' | 'spend';
 
+/**
+ * What a row counts as. The single answer to that question.
+ *
+ * The month totals, the transactions list and the category drill-down all ask
+ * it, and if any two of them answered differently the drill-down would show a
+ * set of rows that does not add up to the figure the user clicked. That is the
+ * one failure that costs the page its credibility, so there is one function.
+ */
+export function classifyRow(row: ClassifiableRow): RowClass {
+  const kind = row.finance_categories?.kind ?? 'expense';
+
+  // Transfers are money moving, not money spent. Kept visible so income and
+  // spend can be made to meet, but never counted as spending.
+  if (kind === 'transfer') return row.direction === 'income' ? 'transfer-in' : 'transfer-out';
+  if (kind === 'income' || row.direction === 'income') return 'income';
+  return 'spend';
+}
+
+/**
+ * The slug a row is filed under, including the fallback.
+ *
+ * A row with no category still appears in the breakdown as "uncategorised" —
+ * dropping it would make the bars add up to less than the month total. The
+ * drill-down has to use this same fallback or clicking that bar finds nothing.
+ */
+export function categorySlugOf(row: ClassifiableRow): string {
+  return row.finance_categories?.slug ?? UNCATEGORISED.slug;
+}
+
+/** Every month that has rows, oldest first. Never hardcoded. */
+export function allMonthKeys(rows: ClassifiableRow[]): string[] {
+  return [...new Set(rows.map((r) => monthKey(r.occurred_at)))].sort();
+}
+
+/** Every month that has rows, oldest first, with its display label. */
+export function availableMonthTabs(
+  rows: ClassifiableRow[]
+): { key: string; label: string; year: string }[] {
+  return allMonthKeys(rows).map((key) => ({
+    key,
+    label: monthLabel(key),
+    year: key.slice(0, 4),
+  }));
+}
+
+function emptyTotals(key: string): MonthTotals {
+  return {
+    key,
+    label: monthLabel(key),
+    spendMinor: 0,
+    incomeMinor: 0,
+    transferInMinor: 0,
+    transferOutMinor: 0,
+    txnCount: 0,
+    coreMinor: 0,
+  };
+}
+
+/**
+ * Totals for every month with rows, oldest first.
+ *
+ * This is what the reconciliation walks — it needs the whole run, not the two
+ * months the comparison happens to be showing, or a month's opening would be
+ * derived from the wrong predecessor.
+ */
+export function monthTotals(rows: TransactionRow[]): MonthTotals[] {
   const totals = new Map<string, MonthTotals>();
-  for (const key of monthKeys)
-    totals.set(key, {
-      key,
-      label: monthLabel(key),
-      spendMinor: 0,
-      incomeMinor: 0,
-      transferInMinor: 0,
-      transferOutMinor: 0,
-      txnCount: 0,
-      coreMinor: 0,
-    });
 
+  for (const row of rows) {
+    const key = monthKey(row.occurred_at);
+    let month = totals.get(key);
+    if (!month) {
+      month = emptyTotals(key);
+      totals.set(key, month);
+    }
+
+    month.txnCount++;
+
+    switch (classifyRow(row)) {
+      case 'transfer-in':
+        month.transferInMinor += row.amount_minor;
+        break;
+      case 'transfer-out':
+        month.transferOutMinor += row.amount_minor;
+        break;
+      case 'income':
+        month.incomeMinor += row.amount_minor;
+        break;
+      case 'spend':
+        month.spendMinor += row.amount_minor;
+        if ((CORE_SLUGS as readonly string[]).includes(categorySlugOf(row)))
+          month.coreMinor += row.amount_minor;
+        break;
+    }
+  }
+
+  return [...totals.values()].sort((a, b) => a.key.localeCompare(b.key));
+}
+
+/**
+ * One month's spending, per category, largest first.
+ *
+ * This is what the single-month view draws, and what the waterfall's outgoing
+ * steps come from. Spend only — transfers and income have their own steps.
+ */
+export function categoryBreakdown(
+  rows: TransactionRow[],
+  key: string
+): CategorySlice[] {
+  const totals = new Map<string, number>();
+  const meta = new Map<string, JoinedCategory>();
+
+  for (const row of rows) {
+    if (monthKey(row.occurred_at) !== key) continue;
+    if (classifyRow(row) !== 'spend') continue;
+
+    const category = row.finance_categories ?? UNCATEGORISED;
+    meta.set(category.slug, category);
+    totals.set(category.slug, (totals.get(category.slug) ?? 0) + row.amount_minor);
+  }
+
+  const monthSpend = [...totals.values()].reduce((n, v) => n + v, 0);
+
+  return [...totals.entries()]
+    .map(([slug, minor]) => {
+      const category = meta.get(slug) ?? UNCATEGORISED;
+      return {
+        slug,
+        name: category.name,
+        icon: category.icon,
+        color: category.color,
+        minor,
+        share: monthSpend > 0 ? minor / monthSpend : 0,
+      };
+    })
+    .sort((a, b) => b.minor - a.minor);
+}
+
+/**
+ * Compare the given months — one or two keys, oldest first.
+ *
+ * Passing one key produces a summary with a single month and no comparison
+ * rows; the single-month view uses `categoryBreakdown` instead.
+ */
+export function summarizeMonths(
+  rows: TransactionRow[],
+  keys: string[]
+): FinanceSummary {
+  if (rows.length === 0 || keys.length === 0) return EMPTY_SUMMARY;
+
+  const wanted = new Set(keys);
   const perCategory = new Map<string, Map<string, number>>();
   const categoryMeta = new Map<string, JoinedCategory>();
 
   for (const row of rows) {
     const key = monthKey(row.occurred_at);
-    const month = totals.get(key);
-    if (!month) continue;
+    if (!wanted.has(key)) continue;
+    if (classifyRow(row) !== 'spend') continue;
 
     const category = row.finance_categories ?? UNCATEGORISED;
     categoryMeta.set(category.slug, category);
-    month.txnCount++;
-
-    // Transfers are money moving, not money spent. Kept visible so income and
-    // spend can be made to meet, but never counted as spending.
-    if (category.kind === 'transfer') {
-      if (row.direction === 'income') month.transferInMinor += row.amount_minor;
-      else month.transferOutMinor += row.amount_minor;
-      continue;
-    }
-
-    if (category.kind === 'income' || row.direction === 'income') {
-      month.incomeMinor += row.amount_minor;
-      continue;
-    }
-
-    month.spendMinor += row.amount_minor;
-    if ((CORE_SLUGS as readonly string[]).includes(category.slug))
-      month.coreMinor += row.amount_minor;
 
     if (!perCategory.has(category.slug)) perCategory.set(category.slug, new Map());
     const byMonth = perCategory.get(category.slug)!;
     byMonth.set(key, (byMonth.get(key) ?? 0) + row.amount_minor);
   }
 
-  const earlierKey = monthKeys[0];
-  const laterKey = monthKeys.length === 2 ? monthKeys[1] : null;
+  const earlierKey = keys[0];
+  const laterKey = keys.length > 1 ? keys[1] : null;
 
   const comparisons: CategoryComparison[] = [...perCategory.entries()]
     .map(([slug, byMonth]) => {
@@ -154,8 +287,10 @@ export function summarize(rows: TransactionRow[]): FinanceSummary {
     })
     .sort((a, b) => b.totalMinor - a.totalMinor);
 
+  const byKey = new Map(monthTotals(rows).map((m) => [m.key, m]));
+
   return {
-    months: monthKeys.map((k) => totals.get(k)!),
+    months: keys.map((k) => byKey.get(k) ?? emptyTotals(k)),
     // Split rather than one combined-total list. Sorting everything together
     // puts a single one-off purchase at the top, which is the opposite of what
     // "what am I spending most on" is asking.
@@ -165,4 +300,11 @@ export function summarize(rows: TransactionRow[]): FinanceSummary {
     monthPrecisionCount: rows.filter((r) => r.date_precision === 'month').length,
     totalRows: rows.length,
   };
+}
+
+/** The two most recent months with rows — the default comparison. */
+export function summarize(rows: TransactionRow[]): FinanceSummary {
+  if (rows.length === 0) return EMPTY_SUMMARY;
+  // Never hardcoded, so this keeps working in September without a code change.
+  return summarizeMonths(rows, allMonthKeys(rows).slice(-2));
 }

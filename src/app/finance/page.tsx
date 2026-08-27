@@ -1,18 +1,100 @@
 'use client';
 
+import { useMemo, useState } from 'react';
+import Link from 'next/link';
 import AppShell from '@/components/layout/AppShell';
 import { useFinanceSummary } from '@/hooks/useFinanceSummary';
+import MonthTabs from '@/components/finance/MonthTabs';
 import MonthTotalsHeader from '@/components/finance/MonthTotalsHeader';
+import MonthCategoryList from '@/components/finance/MonthCategoryList';
 import CategoryRow from '@/components/finance/CategoryRow';
+import WaterfallChart from '@/components/finance/WaterfallChart';
 import ReconcileBlock from '@/components/finance/ReconcileBlock';
+import OpeningBalanceCard from '@/components/finance/OpeningBalanceCard';
+import CategoryDrilldown, {
+  type DrilldownTarget,
+} from '@/components/finance/CategoryDrilldown';
 import LoadingState from '@/components/ui/LoadingState';
 import EmptyState from '@/components/ui/EmptyState';
 import { formatMinor } from '@/lib/finance/format';
+import { buildWaterfall } from '@/lib/finance/waterfall';
+import { ledgerFor } from '@/lib/finance/reconcile';
 import { AlertCircle, ArrowRight } from 'lucide-react';
-import Link from 'next/link';
 
 export default function FinancePage() {
-  const { summary, loading, error } = useFinanceSummary();
+  const {
+    rows,
+    categories,
+    tabs,
+    allMonths,
+    reconciliation,
+    opening,
+    flags,
+    compareOn,
+    breakdownOn,
+    loading,
+    error,
+    setCategory,
+    updateRow,
+    deleteRow,
+    acceptRow,
+  } = useFinanceSummary();
+
+  // A single month is the resting state. Comparison is a question you go and
+  // ask — it is what found the everyday floor, so it stays one tap away.
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [comparing, setComparing] = useState(false);
+  const [drilldown, setDrilldown] = useState<DrilldownTarget | null>(null);
+
+  // Derived rather than synced through an effect. The newest month with rows
+  // is the default, and a selection that no longer exists — the last row in a
+  // month was deleted, or the tabs arrived after the first render — falls back
+  // to it instead of leaving the page pointed at nothing.
+  const activeKey =
+    selectedKey && tabs.some((t) => t.key === selectedKey)
+      ? selectedKey
+      : tabs.at(-1)?.key ?? null;
+
+  const activeIndex = tabs.findIndex((t) => t.key === activeKey);
+  const previousTab = activeIndex > 0 ? tabs[activeIndex - 1] : null;
+
+  const compareKeys = useMemo(
+    () =>
+      comparing && previousTab && activeKey ? [previousTab.key, activeKey] : [],
+    [comparing, previousTab, activeKey]
+  );
+
+  const comparison = useMemo(
+    () => (compareKeys.length === 2 ? compareOn(compareKeys) : null),
+    [compareKeys, compareOn]
+  );
+
+  const slices = useMemo(
+    () => (activeKey ? breakdownOn(activeKey) : []),
+    [activeKey, breakdownOn]
+  );
+
+  const ledger = activeKey ? ledgerFor(reconciliation, activeKey) : null;
+  const chart = useMemo(
+    () => (ledger ? buildWaterfall(ledger, slices) : null),
+    [ledger, slices]
+  );
+
+  const openDrilldown = (slug: string, key: string) => {
+    const monthTab = tabs.find((t) => t.key === key);
+    const slice = (key === activeKey ? slices : breakdownOn(key)).find(
+      (s) => s.slug === slug
+    );
+    if (!slice || !monthTab) return;
+    setDrilldown({
+      monthKey: key,
+      monthLabel: monthTab.label,
+      slug: slice.slug,
+      name: slice.name,
+      color: slice.color,
+      minor: slice.minor,
+    });
+  };
 
   if (loading) {
     return (
@@ -24,10 +106,7 @@ export default function FinancePage() {
     );
   }
 
-  const { months, inBoth, oneMonthOnly, needsReviewCount, monthPrecisionCount, totalRows } =
-    summary;
-
-  if (error || months.length === 0) {
+  if (error || tabs.length === 0 || !activeKey || !ledger) {
     return (
       <AppShell>
         <div className="mx-auto max-w-3xl p-4 pb-8 lg:px-10 lg:py-6 page-enter">
@@ -36,7 +115,7 @@ export default function FinancePage() {
             title={error ? 'Could not load transactions.' : 'Nothing captured yet.'}
             description={
               error ??
-              'Once transactions land, this shows where the money went, one month beside the last.'
+              'Once transactions land, this shows where the money went, month by month.'
             }
           />
         </div>
@@ -44,8 +123,158 @@ export default function FinancePage() {
     );
   }
 
-  const earlierLabel = months[0].label;
-  const laterLabel = months.length > 1 ? months[1].label : months[0].label;
+  const activeLabel = tabs[activeIndex].label;
+  const shownLedgers =
+    comparing && previousTab
+      ? [ledgerFor(reconciliation, previousTab.key), ledger].filter(
+          (l): l is NonNullable<typeof l> => l !== null
+        )
+      : [ledger];
+
+  return (
+    <AppShell>
+      <div className="mx-auto max-w-3xl p-4 pb-8 lg:px-10 lg:py-6 page-enter">
+        <SectionHeader title="WHERE DID MY MONEY GO" />
+
+        <MonthTabs
+          tabs={tabs}
+          activeKey={activeKey}
+          comparing={comparing}
+          compareAgainstLabel={previousTab?.label ?? null}
+          onSelect={setSelectedKey}
+          onToggleCompare={() => setComparing((c) => !c)}
+        />
+
+        <div className="mt-3">
+          <MonthTotalsHeader
+            months={
+              comparison
+                ? comparison.months
+                : allMonths.filter((m) => m.key === activeKey)
+            }
+          />
+        </div>
+
+        <Link
+          href={`/finance/transactions?month=${activeKey}`}
+          className="mt-3 inline-flex items-center gap-1.5 font-mono text-xs text-accent
+            transition-colors hover:text-accent-dim"
+        >
+          All transactions <ArrowRight size={12} />
+        </Link>
+
+        <SectionHeader title="OPENING BALANCE" />
+        <OpeningBalanceCard
+          reconciliation={reconciliation}
+          firstMonthLabel={tabs[0]?.label ?? null}
+          onSave={opening.save}
+          onClear={opening.clear}
+        />
+
+        {chart && (
+          <>
+            <SectionHeader title={`${activeLabel} — WHERE IT WENT`} />
+            <WaterfallChart
+              chart={chart}
+              onDrilldown={(slug) => openDrilldown(slug, activeKey)}
+            />
+          </>
+        )}
+
+        {comparison && previousTab ? (
+          <ComparisonBlocks
+            comparison={comparison}
+            earlierLabel={previousTab.label}
+            laterLabel={activeLabel}
+            onSelect={openDrilldown}
+            earlierKey={previousTab.key}
+            laterKey={activeKey}
+          />
+        ) : (
+          slices.length > 0 && (
+            <>
+              <SectionHeader
+                title="BY CATEGORY"
+                count={`${slices.length} categories`}
+              />
+              <MonthCategoryList
+                slices={slices}
+                onSelect={(slug) => openDrilldown(slug, activeKey)}
+              />
+            </>
+          )
+        )}
+
+        <SectionHeader title="RECONCILE" />
+        <ReconcileBlock ledgers={shownLedgers} />
+
+        <SectionHeader title="DATA" />
+        <div className="flex flex-col gap-2 font-mono text-[11px] text-text-muted">
+          <span>
+            {flags.totalRows} transactions ·{' '}
+            <span className="text-accent">{formatMinor(ledger.spendMinor)}</span> spent in{' '}
+            {activeLabel.toLowerCase()}
+          </span>
+
+          {flags.needsReviewCount > 0 && (
+            <span className="flex items-start gap-1.5">
+              <AlertCircle size={12} className="mt-0.5 shrink-0 text-[#F59E0B]" />
+              <span>
+                <Link
+                  href="/finance/transactions?flagged=1"
+                  className="text-[#F59E0B] underline decoration-dotted underline-offset-2"
+                >
+                  {flags.needsReviewCount} flagged for review
+                </Link>{' '}
+                — included in every total above. The flag means the capture was
+                ambiguous, not that the number is wrong.
+              </span>
+            </span>
+          )}
+
+          {flags.monthPrecisionCount > 0 && (
+            <span className="flex items-start gap-1.5">
+              <AlertCircle size={12} className="mt-0.5 shrink-0 text-text-muted/60" />
+              <span>
+                {flags.monthPrecisionCount} rows carry a month, not a day — they came
+                from notes with no per-line date. Monthly totals are exact; there is no
+                daily breakdown to draw.
+              </span>
+            </span>
+          )}
+        </div>
+      </div>
+
+      <CategoryDrilldown
+        target={drilldown}
+        rows={rows}
+        categories={categories}
+        onClose={() => setDrilldown(null)}
+        onSetCategory={setCategory}
+        onUpdate={updateRow}
+        onDelete={deleteRow}
+        onAccept={acceptRow}
+      />
+    </AppShell>
+  );
+}
+
+function ComparisonBlocks({
+  comparison,
+  earlierLabel,
+  laterLabel,
+  earlierKey,
+  laterKey,
+  onSelect,
+}: {
+  comparison: ReturnType<ReturnType<typeof useFinanceSummary>['compareOn']>;
+  earlierLabel: string;
+  laterLabel: string;
+  earlierKey: string;
+  laterKey: string;
+  onSelect: (slug: string, key: string) => void;
+}) {
+  const { inBoth, oneMonthOnly } = comparison;
 
   // One scale across both blocks so a bar means the same thing everywhere.
   const scaleMinor = Math.max(
@@ -54,110 +283,59 @@ export default function FinancePage() {
   );
 
   return (
-    <AppShell>
-      <div className="mx-auto max-w-3xl p-4 pb-8 lg:px-10 lg:py-6 page-enter">
-        <SectionHeader title="WHERE DID MY MONEY GO" />
-        <MonthTotalsHeader months={months} />
+    <>
+      {inBoth.length > 0 && (
+        <>
+          <SectionHeader title="IN BOTH MONTHS" count={`${inBoth.length} categories`} />
+          <p className="-mt-1 mb-2 font-mono text-[10px] leading-relaxed text-text-muted/60">
+            Spending that showed up in {earlierLabel.toLowerCase()} and{' '}
+            {laterLabel.toLowerCase()}. Two months is enough to see a direction, not
+            enough to call something a habit.
+          </p>
+          <div className="rounded-lg border border-border/50 bg-surface/20 px-3">
+            {inBoth.map((c) => (
+              <CategoryRow
+                key={c.slug}
+                category={c}
+                scaleMinor={scaleMinor}
+                earlierLabel={earlierLabel}
+                laterLabel={laterLabel}
+                onSelect={(monthKey) => onSelect(c.slug, monthKey)}
+                earlierKey={earlierKey}
+                laterKey={laterKey}
+              />
+            ))}
+          </div>
+        </>
+      )}
 
-        <Link
-          href="/finance/transactions"
-          className="mt-3 inline-flex items-center gap-1.5 font-mono text-xs text-accent
-            transition-colors hover:text-accent-dim"
-        >
-          All transactions <ArrowRight size={12} />
-        </Link>
-
-        {inBoth.length > 0 && (
-          <>
-            <SectionHeader
-              title="IN BOTH MONTHS"
-              count={`${inBoth.length} categories`}
-            />
-            <p className="-mt-1 mb-2 font-mono text-[10px] leading-relaxed text-text-muted/60">
-              Spending that showed up in {earlierLabel.toLowerCase()} and{' '}
-              {laterLabel.toLowerCase()}. Two months is enough to see a direction,
-              not enough to call something a habit.
-            </p>
-            <div className="rounded-lg border border-border/50 bg-surface/20 px-3">
-              {inBoth.map((c) => (
-                <CategoryRow
-                  key={c.slug}
-                  category={c}
-                  scaleMinor={scaleMinor}
-                  earlierLabel={earlierLabel}
-                  laterLabel={laterLabel}
-                />
-              ))}
-            </div>
-          </>
-        )}
-
-        {oneMonthOnly.length > 0 && (
-          <>
-            <SectionHeader
-              title="ONE MONTH ONLY"
-              count={`${oneMonthOnly.length} categories`}
-            />
-            <p className="-mt-1 mb-2 font-mono text-[10px] leading-relaxed text-text-muted/60">
-              Appeared in one month and not the other. Some of this is genuinely
-              one-off; some is a gap in what got captured.
-            </p>
-            <div className="rounded-lg border border-border/50 bg-surface/20 px-3">
-              {oneMonthOnly.map((c) => (
-                <CategoryRow
-                  key={c.slug}
-                  category={c}
-                  scaleMinor={scaleMinor}
-                  earlierLabel={earlierLabel}
-                  laterLabel={laterLabel}
-                />
-              ))}
-            </div>
-          </>
-        )}
-
-        <SectionHeader title="RECONCILE" />
-        <ReconcileBlock months={months} />
-
-        <SectionHeader title="DATA" />
-        <div className="flex flex-col gap-2 font-mono text-[11px] text-text-muted">
-          <span>
-            {totalRows} transactions ·{' '}
-            <span className="text-accent">{formatMinor(
-              months.reduce((n, m) => n + m.spendMinor, 0)
-            )}</span>{' '}
-            spent across {months.length} month{months.length === 1 ? '' : 's'}
-          </span>
-
-          {needsReviewCount > 0 && (
-            <span className="flex items-start gap-1.5">
-              <AlertCircle size={12} className="mt-0.5 shrink-0 text-[#F59E0B]" />
-              <span>
-                <Link
-                  href="/finance/transactions?flagged=1"
-                  className="text-[#F59E0B] underline decoration-dotted underline-offset-2"
-                >
-                  {needsReviewCount} flagged for review
-                </Link>{' '}
-                — included in every total above. The flag means the capture was
-                ambiguous, not that the number is wrong.
-              </span>
-            </span>
-          )}
-
-          {monthPrecisionCount > 0 && (
-            <span className="flex items-start gap-1.5">
-              <AlertCircle size={12} className="mt-0.5 shrink-0 text-text-muted/60" />
-              <span>
-                {monthPrecisionCount} rows carry a month, not a day — they came from
-                notes with no per-line date. Monthly totals are exact; there is no
-                daily breakdown to draw.
-              </span>
-            </span>
-          )}
-        </div>
-      </div>
-    </AppShell>
+      {oneMonthOnly.length > 0 && (
+        <>
+          <SectionHeader
+            title="ONE MONTH ONLY"
+            count={`${oneMonthOnly.length} categories`}
+          />
+          <p className="-mt-1 mb-2 font-mono text-[10px] leading-relaxed text-text-muted/60">
+            Appeared in one month and not the other. Some of this is genuinely one-off;
+            some is a gap in what got captured.
+          </p>
+          <div className="rounded-lg border border-border/50 bg-surface/20 px-3">
+            {oneMonthOnly.map((c) => (
+              <CategoryRow
+                key={c.slug}
+                category={c}
+                scaleMinor={scaleMinor}
+                earlierLabel={earlierLabel}
+                laterLabel={laterLabel}
+                onSelect={(monthKey) => onSelect(c.slug, monthKey)}
+                earlierKey={earlierKey}
+                laterKey={laterKey}
+              />
+            ))}
+          </div>
+        </>
+      )}
+    </>
   );
 }
 

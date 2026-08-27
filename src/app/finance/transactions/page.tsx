@@ -39,14 +39,19 @@ export default function TransactionsPage() {
 function TransactionsView() {
   const searchParams = useSearchParams();
   const highlightId = searchParams.get('highlight');
-  // /finance links here with ?flagged=1 from its review count.
+  // /finance links here with ?flagged=1 from its review count, and with
+  // ?month=&category= from the drill-down's "open in list".
   const flaggedFromUrl = searchParams.get('flagged') === '1';
+  const monthFromUrl = searchParams.get('month');
+  const categoryFromUrl = searchParams.get('category');
 
   const { rows, categories, loading, error, setCategory, updateRow, deleteRow, acceptRow } =
     useTransactions();
   const [filters, setFilters] = useState<TransactionFilters>({
     ...NO_FILTERS,
     flaggedOnly: flaggedFromUrl,
+    month: monthFromUrl,
+    categorySlug: categoryFromUrl,
   });
 
   const shown = useMemo(() => filterTransactions(rows, filters), [rows, filters]);

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useSupabase } from '@/components/providers/SupabaseProvider';
 import { useCategoryAssignment } from './useCategoryAssignment';
 import type { TransactionRecord } from '@/lib/finance/transactions';
+import type { RowPatch } from '@/lib/finance/edit';
 
 export interface CategoryOption {
   id: string;
@@ -102,11 +103,15 @@ export function useTransactions() {
     [assign, categories, rows]
   );
 
+  /**
+   * Apply an edit. The patch is built by `buildRowPatch`, which decides which
+   * fields actually changed and whether date_precision has to be upgraded —
+   * this only writes what it is handed.
+   */
   const updateRow = useCallback(
-    async (
-      transactionId: string,
-      patch: { comment?: string; amount_minor?: number }
-    ) => {
+    async (transactionId: string, patch: RowPatch) => {
+      if (Object.keys(patch).length === 0) return;
+
       const prev = rows;
       setRows((curr) =>
         curr.map((r) => (r.id === transactionId ? { ...r, ...patch } : r))

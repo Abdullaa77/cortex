@@ -6,7 +6,7 @@
  */
 
 import { monthKey, monthLabel } from './format.ts';
-import type { JoinedCategory } from './summarize.ts';
+import { classifyRow, categorySlugOf, type JoinedCategory } from './summarize.ts';
 
 export interface TransactionRecord {
   id: string;
@@ -46,11 +46,45 @@ export interface MonthGroup {
   spendMinor: number;
 }
 
-/** True when this row counts as money spent, rather than moved or earned. */
+/**
+ * True when this row counts as money spent, rather than moved or earned.
+ *
+ * Delegates rather than deciding again — see `classifyRow`. The list's totals
+ * and the /finance figures have to agree row for row.
+ */
 export function isSpendRow(row: TransactionRecord): boolean {
-  const kind = row.finance_categories?.kind ?? 'expense';
-  if (kind === 'transfer' || kind === 'income') return false;
-  return row.direction === 'expense';
+  return classifyRow(row) === 'spend';
+}
+
+/**
+ * The rows behind one category's figure for one month.
+ *
+ * This is the drill-down, and its whole value is that it adds up. It filters
+ * on exactly what `categoryBreakdown` aggregated on — same month bucket, same
+ * spend classification, same uncategorised fallback — so the modal's total and
+ * the number that was clicked are the same arithmetic run twice. A test pins
+ * that; if it ever drifts the page stops being worth trusting.
+ *
+ * Newest first, matching the list.
+ */
+export function drilldownRows(
+  rows: TransactionRecord[],
+  key: string,
+  slug: string
+): TransactionRecord[] {
+  return rows
+    .filter(
+      (row) =>
+        monthKey(row.occurred_at) === key &&
+        classifyRow(row) === 'spend' &&
+        categorySlugOf(row) === slug
+    )
+    .sort((a, b) => b.occurred_at.localeCompare(a.occurred_at));
+}
+
+/** Sum of a set of rows, in minor units. */
+export function sumMinor(rows: TransactionRecord[]): number {
+  return rows.reduce((n, r) => n + r.amount_minor, 0);
 }
 
 export function filterTransactions(
@@ -59,7 +93,9 @@ export function filterTransactions(
 ): TransactionRecord[] {
   return rows.filter((row) => {
     if (filters.month && monthKey(row.occurred_at) !== filters.month) return false;
-    if (filters.categorySlug && row.finance_categories?.slug !== filters.categorySlug)
+    // categorySlugOf, not finance_categories?.slug — otherwise a link that
+    // filters to "uncategorised" matches nothing at all.
+    if (filters.categorySlug && categorySlugOf(row) !== filters.categorySlug)
       return false;
     if (filters.flaggedOnly && !row.needs_review) return false;
     if (filters.uncategorisedOnly && row.finance_categories !== null) return false;

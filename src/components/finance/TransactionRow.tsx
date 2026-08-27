@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { formatMinor } from '@/lib/finance/format';
 import { explainFlag } from '@/lib/finance/parse';
 import { formatOccurred, type TransactionRecord } from '@/lib/finance/transactions';
+import { buildRowPatch, toDraft, type RowDraft, type RowPatch } from '@/lib/finance/edit';
 import type { CategoryOption } from '@/hooks/useTransactions';
 import { AlertTriangle, Check, Pencil, Trash2, X } from 'lucide-react';
 
@@ -12,11 +13,23 @@ interface TransactionRowProps {
   categories: CategoryOption[];
   highlighted: boolean;
   onSetCategory: (id: string, categoryId: string) => Promise<void>;
-  onUpdate: (id: string, patch: { comment?: string; amount_minor?: number }) => Promise<void>;
+  onUpdate: (id: string, patch: RowPatch) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   onAccept: (id: string) => Promise<void>;
 }
 
+/**
+ * A transaction, readable at a glance and fully editable underneath.
+ *
+ * Every field is reachable here — amount, direction, comment, category, date
+ * and time — because a row you can only half-correct is a row you end up
+ * deleting and retyping. The editor is behind a pencil rather than always
+ * open: the list is read far more often than it is edited.
+ *
+ * What the patch contains is decided by `buildRowPatch`, not here. That is
+ * where the rule lives that editing an imported row's date flips its
+ * date_precision to 'day', and it is tested, which this component is not.
+ */
 export default function TransactionRow({
   row,
   categories,
@@ -30,29 +43,83 @@ export default function TransactionRow({
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showFlags, setShowFlags] = useState(false);
-  const [draftComment, setDraftComment] = useState(row.comment);
-  const [draftAmount, setDraftAmount] = useState(
-    (row.amount_minor / 100).toString()
-  );
+  const [draft, setDraft] = useState<RowDraft>(() => toDraft(row));
+  const [errors, setErrors] = useState<string[]>([]);
   const ref = useRef<HTMLDivElement>(null);
+  const chipRef = useRef<HTMLButtonElement>(null);
+  const [pickerPos, setPickerPos] = useState<{ top: number; left: number } | null>(null);
 
   useEffect(() => {
     if (highlighted) ref.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
   }, [highlighted]);
 
+  /**
+   * The category list is positioned fixed, against the viewport.
+   *
+   * Absolute positioning is clipped by any scrolling ancestor, and this row now
+   * renders inside one — the drill-down modal scrolls its list. A picker that
+   * gets cut in half on the last visible row makes the modal's main action
+   * unusable, so the list escapes the clipping context entirely and is placed
+   * from the chip's own rect. It flips above the chip when there is no room
+   * below.
+   *
+   * Placed in a layout effect, before paint, so a stale position from the last
+   * time the picker was open is never the one that gets drawn.
+   */
+  useLayoutEffect(() => {
+    if (!pickerOpen) return;
+
+    const place = () => {
+      const chip = chipRef.current;
+      if (!chip) return;
+      const rect = chip.getBoundingClientRect();
+      const height = Math.min(224, categories.length * 30 + 8);
+      const below = window.innerHeight - rect.bottom;
+
+      setPickerPos({
+        top: below < height + 8 ? Math.max(8, rect.top - height - 4) : rect.bottom + 4,
+        left: Math.max(8, Math.min(rect.right - 192, window.innerWidth - 200)),
+      });
+    };
+
+    place();
+    window.addEventListener('resize', place);
+    // Capture phase, so a scroll in any ancestor keeps the list on its chip.
+    window.addEventListener('scroll', place, true);
+    return () => {
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
+  }, [pickerOpen, categories.length]);
+
   const occurred = formatOccurred(row);
   const category = row.finance_categories;
   const income = row.direction === 'income';
 
-  const save = async () => {
-    const major = Number(draftAmount.replace(/,/g, ''));
-    const patch: { comment?: string; amount_minor?: number } = {};
-    if (draftComment !== row.comment) patch.comment = draftComment;
-    if (Number.isFinite(major) && major > 0 && Math.round(major * 100) !== row.amount_minor)
-      patch.amount_minor = Math.round(major * 100);
-    if (Object.keys(patch).length > 0) await onUpdate(row.id, patch);
+  const openEditor = () => {
+    setDraft(toDraft(row));
+    setErrors([]);
+    setEditing(true);
+  };
+
+  const cancel = () => {
+    setDraft(toDraft(row));
+    setErrors([]);
     setEditing(false);
   };
+
+  const save = async () => {
+    const { patch, errors: problems } = buildRowPatch(row, draft);
+    if (problems.length > 0) {
+      setErrors(problems);
+      return;
+    }
+    if (Object.keys(patch).length > 0) await onUpdate(row.id, patch);
+    setEditing(false);
+    setErrors([]);
+  };
+
+  const set = (patch: Partial<RowDraft>) => setDraft((d) => ({ ...d, ...patch }));
 
   return (
     <div
@@ -76,10 +143,13 @@ export default function TransactionRow({
 
         {editing ? (
           <input
-            value={draftAmount}
-            onChange={(e) => setDraftAmount(e.target.value)}
+            value={draft.amount}
+            onChange={(e) => set({ amount: e.target.value })}
+            onKeyDown={(e) => e.key === 'Enter' && save()}
+            inputMode="decimal"
+            aria-label="Amount"
             className="w-28 rounded border border-accent/30 bg-surface2 px-1.5 py-0.5 text-right
-              font-mono text-xs text-text-primary focus:outline-none"
+              font-mono text-xs tabular-nums text-text-primary focus:outline-none"
           />
         ) : (
           <span
@@ -93,8 +163,10 @@ export default function TransactionRow({
 
         {editing ? (
           <input
-            value={draftComment}
-            onChange={(e) => setDraftComment(e.target.value)}
+            value={draft.comment}
+            onChange={(e) => set({ comment: e.target.value })}
+            onKeyDown={(e) => e.key === 'Enter' && save()}
+            aria-label="Description"
             className="min-w-0 flex-1 rounded border border-accent/30 bg-surface2 px-1.5 py-0.5
               font-mono text-xs text-text-primary focus:outline-none"
           />
@@ -104,8 +176,9 @@ export default function TransactionRow({
           </span>
         )}
 
-        <div className="relative shrink-0">
+        <div className="shrink-0">
           <button
+            ref={chipRef}
             type="button"
             onClick={() => setPickerOpen((o) => !o)}
             className="rounded-full border px-2 py-0.5 font-mono text-[10px] transition-colors"
@@ -119,30 +192,99 @@ export default function TransactionRow({
             <span className="ml-1 opacity-60">▾</span>
           </button>
 
-          {pickerOpen && (
-            <div
-              className="absolute right-0 top-full z-50 mt-1 max-h-56 w-48 overflow-y-auto rounded-lg
-                border border-border bg-surface p-1 shadow-[0_0_20px_rgba(0,0,0,0.5)]"
-            >
-              {categories.map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={async () => {
-                    setPickerOpen(false);
-                    await onSetCategory(row.id, c.id);
-                  }}
-                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left font-mono
-                    text-[11px] text-text-muted transition-colors hover:bg-surface2 hover:text-text-primary"
-                >
-                  <span style={{ color: c.color }}>{c.icon}</span>
-                  <span>{c.name}</span>
-                </button>
-              ))}
-            </div>
+          {pickerOpen && pickerPos && (
+            <>
+              {/* Click-away. The list is fixed, so it has no parent to catch this. */}
+              <div
+                className="fixed inset-0 z-[70]"
+                onClick={() => setPickerOpen(false)}
+                aria-hidden
+              />
+              <div
+                className="fixed z-[71] max-h-56 w-48 overflow-y-auto rounded-lg border border-border
+                  bg-surface p-1 shadow-[0_0_20px_rgba(0,0,0,0.5)]"
+                style={{ top: pickerPos.top, left: pickerPos.left }}
+              >
+                {categories.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={async () => {
+                      setPickerOpen(false);
+                      await onSetCategory(row.id, c.id);
+                    }}
+                    className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left font-mono
+                      text-[11px] text-text-muted transition-colors hover:bg-surface2 hover:text-text-primary"
+                  >
+                    <span style={{ color: c.color }}>{c.icon}</span>
+                    <span>{c.name}</span>
+                  </button>
+                ))}
+              </div>
+            </>
           )}
         </div>
       </div>
+
+      {editing && (
+        <div className="mt-2 flex flex-wrap items-center gap-1.5 pl-16">
+          <div className="flex overflow-hidden rounded border border-border">
+            {(['expense', 'income'] as const).map((d) => (
+              <button
+                key={d}
+                type="button"
+                onClick={() => set({ direction: d })}
+                className="px-2 py-0.5 font-mono text-[10px] transition-colors"
+                style={{
+                  backgroundColor:
+                    draft.direction === d
+                      ? d === 'income'
+                        ? '#00FF8815'
+                        : '#EF444415'
+                      : 'transparent',
+                  color:
+                    draft.direction === d
+                      ? d === 'income'
+                        ? '#00FF88'
+                        : '#EF4444'
+                      : '#6B7280',
+                }}
+              >
+                {d}
+              </button>
+            ))}
+          </div>
+
+          <input
+            type="date"
+            value={draft.date}
+            onChange={(e) => set({ date: e.target.value })}
+            aria-label="Date"
+            className="rounded border border-border bg-surface2 px-1.5 py-0.5 font-mono text-[11px]
+              text-text-primary focus:border-accent/40 focus:outline-none"
+          />
+          <input
+            type="time"
+            value={draft.time}
+            onChange={(e) => set({ time: e.target.value })}
+            aria-label="Time"
+            className="rounded border border-border bg-surface2 px-1.5 py-0.5 font-mono text-[11px]
+              text-text-primary focus:border-accent/40 focus:outline-none"
+          />
+
+          {row.date_precision === 'month' && (
+            <span className="font-mono text-[10px] text-text-muted/60">
+              picking a day makes this row exact
+            </span>
+          )}
+        </div>
+      )}
+
+      {errors.length > 0 && (
+        <p className="mt-1.5 pl-16 font-mono text-[10px] text-[#EF4444]">
+          {errors.join(' ')}
+        </p>
+      )}
 
       <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 pl-16">
         {/* The thing he actually typed. Without it a bad parse cannot be audited. */}
@@ -185,11 +327,8 @@ export default function TransactionRow({
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setEditing(false);
-                  setDraftComment(row.comment);
-                  setDraftAmount((row.amount_minor / 100).toString());
-                }}
+                onClick={cancel}
+                aria-label="Cancel edit"
                 className="text-text-muted transition-colors hover:text-text-primary"
               >
                 <X size={12} />
@@ -198,7 +337,8 @@ export default function TransactionRow({
           ) : (
             <button
               type="button"
-              onClick={() => setEditing(true)}
+              onClick={openEditor}
+              aria-label="Edit transaction"
               className="text-text-muted transition-colors hover:text-text-primary"
             >
               <Pencil size={12} />
@@ -216,6 +356,7 @@ export default function TransactionRow({
               <button
                 type="button"
                 onClick={() => setConfirmDelete(false)}
+                aria-label="Cancel delete"
                 className="text-text-muted transition-colors hover:text-text-primary"
               >
                 <X size={12} />
@@ -225,6 +366,7 @@ export default function TransactionRow({
             <button
               type="button"
               onClick={() => setConfirmDelete(true)}
+              aria-label="Delete transaction"
               className="text-text-muted transition-colors hover:text-[#EF4444]"
             >
               <Trash2 size={12} />

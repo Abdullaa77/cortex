@@ -21,6 +21,8 @@ export interface BookedRow {
   direction: 'expense' | 'income';
   comment: string;
   categorySlug: string | null;
+  /** When it happened. Editable from the confirmation strip after the save. */
+  occurredAt: string;
 }
 
 export interface CaptureBooking extends Booking {
@@ -115,7 +117,9 @@ export function useFinanceCapture() {
       const { data, error } = await supabase
         .from('transactions')
         .insert(payload)
-        .select('id, amount_minor, currency, direction, comment, category_id');
+        .select(
+          'id, amount_minor, currency, direction, comment, category_id, occurred_at'
+        );
 
       if (error || !data) {
         console.error('[Cortex] finance capture failed:', error);
@@ -130,6 +134,7 @@ export function useFinanceCapture() {
         comment: row.comment,
         categorySlug:
           categories.current.find((c) => c.id === row.category_id)?.slug ?? null,
+        occurredAt: row.occurred_at,
       }));
 
       return {
@@ -183,6 +188,29 @@ export function useFinanceCapture() {
   );
 
   /**
+   * Move a booked row to a different instant.
+   *
+   * Offered after the save, never before it. Asking for a date in front of the
+   * input would put friction on the one thing that has to stay frictionless —
+   * "-10k banana" plus enter still books immediately, and the date is there
+   * afterwards for the times it was not today.
+   *
+   * Rows written here are always 'day' precision already, so there is no
+   * precision to upgrade; that rule only applies to the imported month-only
+   * rows, and it lives in buildRowPatch.
+   */
+  const setOccurredAt = useCallback(
+    async (transactionId: string, occurredAt: string) => {
+      if (!userId) return;
+      await supabase
+        .from('transactions')
+        .update({ occurred_at: occurredAt, date_precision: 'day' })
+        .eq('id', transactionId);
+    },
+    [supabase, userId]
+  );
+
+  /**
    * "Not money" — remove every row this capture made and hand back the
    * original text so the caller can file it to inbox unchanged.
    */
@@ -195,5 +223,5 @@ export function useFinanceCapture() {
     [remove]
   );
 
-  return { ready, book, remove, setCategory, discard };
+  return { ready, book, remove, setCategory, setOccurredAt, discard };
 }
