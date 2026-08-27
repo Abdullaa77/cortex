@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import AppShell from '@/components/layout/AppShell';
 import { useTransactions } from '@/hooks/useTransactions';
 import TransactionRow from '@/components/finance/TransactionRow';
+import CategoryManager from '@/components/finance/CategoryManager';
 import LoadingState from '@/components/ui/LoadingState';
 import EmptyState from '@/components/ui/EmptyState';
 import { formatMinor } from '@/lib/finance/format';
@@ -18,7 +19,7 @@ import {
   NO_FILTERS,
   type TransactionFilters,
 } from '@/lib/finance/transactions';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Tags } from 'lucide-react';
 
 export default function TransactionsPage() {
   return (
@@ -45,8 +46,21 @@ function TransactionsView() {
   const monthFromUrl = searchParams.get('month');
   const categoryFromUrl = searchParams.get('category');
 
-  const { rows, categories, loading, error, setCategory, updateRow, deleteRow, acceptRow } =
-    useTransactions();
+  const {
+    rows,
+    categories,
+    allCategories,
+    refetch,
+    loading,
+    error,
+    setCategory,
+    updateRow,
+    deleteRow,
+    acceptRow,
+    linkReimbursement,
+    unlinkReimbursement,
+  } = useTransactions();
+  const [managingCategories, setManagingCategories] = useState(false);
   const [filters, setFilters] = useState<TransactionFilters>({
     ...NO_FILTERS,
     flaggedOnly: flaggedFromUrl,
@@ -76,13 +90,23 @@ function TransactionsView() {
   return (
     <AppShell>
       <div className="mx-auto max-w-3xl p-4 pb-8 lg:px-10 lg:py-6 page-enter">
-        <Link
-          href="/finance"
-          className="mt-2 inline-flex items-center gap-1.5 font-mono text-xs text-text-muted
-            transition-colors hover:text-accent"
-        >
-          <ArrowLeft size={12} /> Where did my money go
-        </Link>
+        <div className="mt-2 flex flex-wrap items-center gap-4">
+          <Link
+            href="/finance"
+            className="inline-flex items-center gap-1.5 font-mono text-xs text-text-muted
+              transition-colors hover:text-accent"
+          >
+            <ArrowLeft size={12} /> Where did my money go
+          </Link>
+          <button
+            type="button"
+            onClick={() => setManagingCategories(true)}
+            className="inline-flex items-center gap-1.5 font-mono text-xs text-text-muted
+              transition-colors hover:text-accent"
+          >
+            <Tags size={12} /> Categories
+          </button>
+        </div>
 
         <SectionHeader title="TRANSACTIONS" count={`${stats.shown} of ${stats.total}`} />
 
@@ -140,9 +164,10 @@ function TransactionsView() {
         </div>
 
         <p className="mt-3 font-mono text-[10px] text-text-muted/60">
-          Showing {stats.shown} entries · {formatMinor(stats.spendMinor)} spent. Rows
-          marked <span className="text-text-muted">~</span> know their month but not
-          their day — they came from notes with no per-line date.
+          Showing {stats.shown} entries · {formatMinor(stats.spendMinor)} spent, net of
+          anything that came back. Rows marked{' '}
+          <span className="text-text-muted">~</span> know their month but not their day —
+          they came from notes with no per-line date.
         </p>
 
         {error && (
@@ -176,6 +201,9 @@ function TransactionsView() {
                     onUpdate={updateRow}
                     onDelete={deleteRow}
                     onAccept={acceptRow}
+                    allRows={rows}
+                    onLink={linkReimbursement}
+                    onUnlink={unlinkReimbursement}
                   />
                 ))}
               </div>
@@ -183,6 +211,14 @@ function TransactionsView() {
           ))
         )}
       </div>
+
+      <CategoryManager
+        open={managingCategories}
+        onClose={() => setManagingCategories(false)}
+        categories={allCategories}
+        rows={rows}
+        onChanged={refetch}
+      />
     </AppShell>
   );
 }

@@ -29,6 +29,9 @@ interface CategoryDrilldownProps {
   onUpdate: (id: string, patch: RowPatch) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   onAccept: (id: string) => Promise<void>;
+  onLink: (sourceId: string, targetId: string) => Promise<string | null>;
+  onUnlink: (sourceId: string) => Promise<void>;
+  onManageCategories: () => void;
 }
 
 /**
@@ -52,6 +55,9 @@ export default function CategoryDrilldown({
   onUpdate,
   onDelete,
   onAccept,
+  onLink,
+  onUnlink,
+  onManageCategories,
 }: CategoryDrilldownProps) {
   if (!target) return null;
 
@@ -102,13 +108,26 @@ export default function CategoryDrilldown({
               onUpdate={onUpdate}
               onDelete={onDelete}
               onAccept={onAccept}
+              allRows={rows}
+              onLink={onLink}
+              onUnlink={onUnlink}
             />
           ))}
         </div>
 
-        <p className="mt-2.5 px-2 font-mono text-[10px] leading-relaxed text-text-muted/60">
-          Recategorising a row here moves it out of this figure.
-        </p>
+        <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 px-2">
+          <p className="font-mono text-[10px] leading-relaxed text-text-muted/60">
+            Recategorising a row here moves it out of this figure. A repayment linked to
+            an expense is shown beside it and already counted in the net.
+          </p>
+          <button
+            type="button"
+            onClick={onManageCategories}
+            className="font-mono text-[10px] text-accent transition-colors hover:text-accent-dim"
+          >
+            manage categories
+          </button>
+        </div>
       </div>
     </Modal>
   );

@@ -3,10 +3,16 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { formatMinor } from '@/lib/finance/format';
 import { explainFlag } from '@/lib/finance/parse';
-import { formatOccurred, type TransactionRecord } from '@/lib/finance/transactions';
+import {
+  formatOccurred,
+  repaymentsFor,
+  repaidTarget,
+  type TransactionRecord,
+} from '@/lib/finance/transactions';
+import { linkCandidates, reimbursementsByTarget, effectiveMinor } from '@/lib/finance/links';
 import { buildRowPatch, toDraft, type RowDraft, type RowPatch } from '@/lib/finance/edit';
 import type { CategoryOption } from '@/hooks/useTransactions';
-import { AlertTriangle, Check, Pencil, Trash2, X } from 'lucide-react';
+import { AlertTriangle, Check, Link2, Link2Off, Pencil, Trash2, X } from 'lucide-react';
 
 interface TransactionRowProps {
   row: TransactionRecord;
@@ -16,6 +22,13 @@ interface TransactionRowProps {
   onUpdate: (id: string, patch: RowPatch) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   onAccept: (id: string) => Promise<void>;
+  /**
+   * Every row, for resolving links. Omit to render without link controls —
+   * the capture strip has no list to point at.
+   */
+  allRows?: TransactionRecord[];
+  onLink?: (sourceId: string, targetId: string) => Promise<string | null>;
+  onUnlink?: (sourceId: string) => Promise<void>;
 }
 
 /**
@@ -38,6 +51,9 @@ export default function TransactionRow({
   onUpdate,
   onDelete,
   onAccept,
+  allRows,
+  onLink,
+  onUnlink,
 }: TransactionRowProps) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -45,6 +61,8 @@ export default function TransactionRow({
   const [showFlags, setShowFlags] = useState(false);
   const [draft, setDraft] = useState<RowDraft>(() => toDraft(row));
   const [errors, setErrors] = useState<string[]>([]);
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [linkError, setLinkError] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const chipRef = useRef<HTMLButtonElement>(null);
   const [pickerPos, setPickerPos] = useState<{ top: number; left: number } | null>(null);
@@ -95,6 +113,17 @@ export default function TransactionRow({
   const occurred = formatOccurred(row);
   const category = row.finance_categories;
   const income = row.direction === 'income';
+
+  // Link state. Everything here is derived from the full row set, so a filter
+  // that hides one half of a pair cannot make the other half read as unlinked.
+  const linkable = allRows ?? [];
+  const reimbursed = reimbursementsByTarget(linkable);
+  const repayments = allRows ? repaymentsFor(row, linkable) : [];
+  const repaid = allRows ? repaidTarget(row, linkable) : null;
+  const backMinor = repayments.reduce((n, r) => n + r.amount_minor, 0);
+  const netMinor = effectiveMinor(row, reimbursed);
+  const candidates = allRows && onLink ? linkCandidates(row, linkable) : [];
+  const canOfferLink = Boolean(onLink) && !repaid && income && candidates.length > 0;
 
   const openEditor = () => {
     setDraft(toDraft(row));
@@ -286,6 +315,83 @@ export default function TransactionRow({
         </p>
       )}
 
+      {/* What the link means, on whichever side of it this row sits. Both rows
+          say so — a netted figure that is only explained on one of them is a
+          figure the other row appears to contradict. */}
+      {backMinor > 0 && (
+        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 pl-16 font-mono text-[10px]">
+          <Link2 size={10} className="shrink-0 text-accent/70" />
+          <span className="text-text-muted">
+            {formatMinor(backMinor)} came back ·{' '}
+            <span className="text-accent">net {formatMinor(netMinor)}</span>
+          </span>
+          <span className="text-text-muted/50">
+            {repayments.length === 1
+              ? repayments[0].comment || 'repayment'
+              : `${repayments.length} repayments`}
+          </span>
+        </div>
+      )}
+
+      {repaid && (
+        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 pl-16 font-mono text-[10px]">
+          <Link2 size={10} className="shrink-0 text-accent/70" />
+          <span className="text-text-muted">
+            repays{' '}
+            <span className="text-text-primary">
+              {repaid.comment || 'an expense'}
+            </span>{' '}
+            · {formatMinor(repaid.amount_minor)}
+          </span>
+          {onUnlink && (
+            <button
+              type="button"
+              onClick={() => onUnlink(row.id)}
+              title="Detach — both amounts are restored untouched"
+              className="flex items-center gap-1 text-text-muted transition-colors hover:text-[#F59E0B]"
+            >
+              <Link2Off size={10} /> unlink
+            </button>
+          )}
+        </div>
+      )}
+
+      {linkOpen && candidates.length > 0 && (
+        <div className="mt-1.5 ml-16 rounded border border-accent/20 bg-surface2/40 p-1.5">
+          <p className="mb-1 font-mono text-[10px] text-text-muted">
+            Which expense does this repay?
+          </p>
+          <div className="flex max-h-40 flex-col gap-0.5 overflow-y-auto">
+            {candidates.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={async () => {
+                  const err = onLink ? await onLink(row.id, c.id) : null;
+                  setLinkError(err);
+                  if (!err) setLinkOpen(false);
+                }}
+                className="flex items-baseline gap-2 rounded px-1.5 py-1 text-left font-mono
+                  text-[10px] transition-colors hover:bg-surface2"
+              >
+                <span className="w-20 shrink-0 tabular-nums text-[#EF4444]">
+                  -{formatMinor(c.amount_minor)}
+                </span>
+                <span className="min-w-0 flex-1 truncate text-text-primary">
+                  {c.comment || 'no description'}
+                </span>
+                <span className="shrink-0 text-text-muted/60">
+                  {formatOccurred(c).text}
+                </span>
+              </button>
+            ))}
+          </div>
+          {linkError && (
+            <p className="mt-1 font-mono text-[10px] text-[#EF4444]">{linkError}</p>
+          )}
+        </div>
+      )}
+
       <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 pl-16">
         {/* The thing he actually typed. Without it a bad parse cannot be audited. */}
         <code className="min-w-0 truncate font-mono text-[10px] text-text-muted/50">
@@ -314,6 +420,21 @@ export default function TransactionRow({
               className="text-text-muted transition-colors hover:text-accent"
             >
               <Check size={12} />
+            </button>
+          )}
+          {canOfferLink && (
+            <button
+              type="button"
+              onClick={() => {
+                setLinkError(null);
+                setLinkOpen((o) => !o);
+              }}
+              title="Link this to the expense it repays"
+              className={`transition-colors ${
+                linkOpen ? 'text-accent' : 'text-text-muted hover:text-accent'
+              }`}
+            >
+              <Link2 size={12} />
             </button>
           )}
           {editing ? (
