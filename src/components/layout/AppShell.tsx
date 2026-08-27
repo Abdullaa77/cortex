@@ -5,6 +5,9 @@ import { useInbox } from '@/components/providers/InboxProvider';
 import { useSupabase } from '@/components/providers/SupabaseProvider';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import CommandPalette from '@/components/CommandPalette';
+import CaptureConfirmation from '@/components/finance/CaptureConfirmation';
+import { useFinanceCapture, type CaptureBooking } from '@/hooks/useFinanceCapture';
+import { routeCapture } from '@/lib/finance/route';
 import Header from './Header';
 import Sidebar from './Sidebar';
 import MobileNav from './MobileNav';
@@ -23,6 +26,8 @@ export default function AppShell({ children }: AppShellProps) {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [paletteMode, setPaletteMode] = useState<PaletteMode>('search');
   const [reviewDue, setReviewDue] = useState(false);
+  const [booking, setBooking] = useState<CaptureBooking | null>(null);
+  const finance = useFinanceCapture();
   const [disciplinePercent, setDisciplinePercent] = useState<number | undefined>(undefined);
 
   // Fetch today's discipline score for sidebar badge
@@ -90,7 +95,35 @@ export default function AppShell({ children }: AppShellProps) {
 
   useKeyboardShortcuts(shortcuts, !paletteOpen);
 
-  const handleCapture = async (text: string) => {
+  /** Returns true when the capture became a transaction. */
+  const handleCapture = async (text: string): Promise<boolean> => {
+    // Money goes to transactions, everything else keeps going to inbox exactly
+    // as before. If the write fails for any reason we fall through rather than
+    // dropping the capture — losing what he typed is the one unacceptable
+    // outcome here.
+    const decision = routeCapture(text);
+    if (decision.target === 'finance') {
+      const booked = await finance.book(text, decision);
+      if (booked) {
+        setBooking(booked);
+        return true;
+      }
+    }
+    setBooking(null);
+    await inbox.capture(text);
+    return false;
+  };
+
+  const handleUndo = async () => {
+    if (!booking) return;
+    await finance.remove(booking.transactionIds);
+    setBooking(null);
+  };
+
+  const handleNotMoney = async () => {
+    if (!booking) return;
+    const text = await finance.discard(booking);
+    setBooking(null);
     await inbox.capture(text);
   };
 
@@ -105,6 +138,19 @@ export default function AppShell({ children }: AppShellProps) {
           {children}
         </main>
       </div>
+
+      {/* Desktop: confirmation sits directly above the capture bar */}
+      {booking && (
+        <div className="hidden lg:block">
+          <CaptureConfirmation
+            booking={booking}
+            onSetCategory={finance.setCategory}
+            onUndo={handleUndo}
+            onNotMoney={handleNotMoney}
+            onDismiss={() => setBooking(null)}
+          />
+        </div>
+      )}
 
       {/* Desktop: bottom capture bar */}
       <QuickCapture onCapture={handleCapture} />
@@ -125,11 +171,22 @@ export default function AppShell({ children }: AppShellProps) {
             className="bg-surface/95 backdrop-blur-md border-t border-border"
             style={{ animation: 'slideUp 0.2s ease-out' }}
           >
+            {booking && (
+              <CaptureConfirmation
+                booking={booking}
+                onSetCategory={finance.setCategory}
+                onUndo={handleUndo}
+                onNotMoney={handleNotMoney}
+                onDismiss={() => setBooking(null)}
+              />
+            )}
             <QuickCapture
               isModal
               onCapture={async (text) => {
-                await handleCapture(text);
-                setShowMobileCapture(false);
+                // Keep the sheet open when there is something to confirm —
+                // closing it would hide the undo and "not money" escapes.
+                const booked = await handleCapture(text);
+                if (!booked) setShowMobileCapture(false);
               }}
             />
           </div>

@@ -22,6 +22,7 @@ export const MINOR_UNITS_EXPONENT = 2;
 const MINOR_PER_MAJOR = 100;
 
 export type Direction = 'expense' | 'income';
+export type Currency = 'UZS' | 'USD';
 
 export type FlagCode =
   /** No sign, but the wording reads as income. Never inferred — always asked. */
@@ -59,6 +60,11 @@ export interface ParsedTransaction {
   comment: string;
   /** The exact substring the amount came from. */
   amountSource: string;
+  currency: Currency;
+  /** True when the text named a currency, rather than falling back to UZS. */
+  explicitCurrency: boolean;
+  /** True when the amount carried a k or m suffix. */
+  scaled: boolean;
 }
 
 export interface ParseResult {
@@ -99,6 +105,21 @@ const AMOUNT_HEAD = new RegExp(
   String.raw`^\s*(${NUMBER})(?:\s*([kKmM])(?![A-Za-z]))?`
 );
 const NUMBER_ANYWHERE = new RegExp(NUMBER, 'g');
+
+/**
+ * A currency marker. The captured corpus has none — every transaction in two
+ * months is UZS, and the dollar figures in it are purchased goods or reference
+ * amounts sitting inside comments. But the capture grammar has always allowed
+ * "-$5 coffee", so a marker in the leading position names the currency; one
+ * anywhere else is still just prose.
+ */
+const CURRENCY_HEAD = /^\s*\$\s*/;
+const CURRENCY_TAIL = /^\s*(\$|usd)\b/i;
+
+/** Does this text begin with something we would read as an amount? */
+function startsWithAmount(text: string): boolean {
+  return AMOUNT_HEAD.test(text.replace(CURRENCY_HEAD, ''));
+}
 
 // Deliberately narrow. A bare "gave" matches both "Muxlisa opa gave" (income)
 // and "gave to Lochin aka" (expense), so it earns its place on neither list.
@@ -155,7 +176,7 @@ function splitOnInteriorPlus(body: string): string[] {
   for (let i = 1; i < body.length; i++) {
     if (body[i] !== '+') continue;
     const after = body.slice(i + 1);
-    if (!AMOUNT_HEAD.test(after)) continue;
+    if (!startsWithAmount(after)) continue;
     parts.push(body.slice(start, i));
     start = i + 1;
   }
@@ -167,7 +188,18 @@ function parseSegment(
   segment: string,
   direction: Direction
 ): { txn: ParsedTransaction; flags: ParseFlag[]; extraNumbers: string[] } | null {
-  const match = AMOUNT_HEAD.exec(segment);
+  let rest = segment;
+  let currency: Currency = 'UZS';
+  let explicitCurrency = false;
+
+  const head = CURRENCY_HEAD.exec(rest);
+  if (head) {
+    currency = 'USD';
+    explicitCurrency = true;
+    rest = rest.slice(head[0].length);
+  }
+
+  const match = AMOUNT_HEAD.exec(rest);
   if (!match) return null;
 
   const [matched, numberText, scale] = match;
@@ -175,7 +207,18 @@ function parseSegment(
   if (!converted) return null;
 
   const flags: ParseFlag[] = [];
-  const comment = segment.slice(matched.length).trim();
+  let after = rest.slice(matched.length);
+
+  if (!explicitCurrency) {
+    const tail = CURRENCY_TAIL.exec(after);
+    if (tail) {
+      currency = 'USD';
+      explicitCurrency = true;
+      after = after.slice(tail[0].length);
+    }
+  }
+
+  const comment = after.trim();
 
   if (converted.commaDecimal) {
     flags.push({
@@ -224,6 +267,9 @@ function parseSegment(
       amountMinor: converted.minor,
       comment,
       amountSource: matched.trim(),
+      currency,
+      explicitCurrency,
+      scaled: Boolean(scale),
     },
     flags,
     extraNumbers,

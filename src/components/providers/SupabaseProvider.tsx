@@ -49,6 +49,20 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
             p_user_id: session.user.id,
           });
         }
+
+        // Seed finance categories on first login. The RPC guards on
+        // auth.uid(), so this is the only place it can be called from — the
+        // SQL editor runs as postgres and the guard refuses it there.
+        const { count: categoryCount } = await supabase
+          .from('finance_categories')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', session.user.id);
+
+        if (categoryCount === 0) {
+          await supabase.rpc('seed_finance_categories', {
+            p_user_id: session.user.id,
+          });
+        }
       }
     };
 
