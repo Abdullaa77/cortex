@@ -1,10 +1,11 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { formatMinor } from '@/lib/finance/format';
 import { CATEGORIES } from '@/lib/finance/categorize';
 import type { CaptureBooking } from '@/hooks/useFinanceCapture';
-import { X } from 'lucide-react';
+import { Check, X } from 'lucide-react';
 
 interface CaptureConfirmationProps {
   booking: CaptureBooking;
@@ -17,6 +18,11 @@ interface CaptureConfirmationProps {
 /**
  * Shown inline under the capture bar, never as a modal — a modal would break
  * the type-and-move rhythm that makes the bar worth using.
+ *
+ * The success state has to be unmistakable. "booked" on its own did not read
+ * as confirmation — Scott went looking for a confirm button that deliberately
+ * does not exist. A tick, the word "saved", and a link that shows him the row
+ * answer "did that land?" by proof rather than by wording.
  *
  * "not money" is the important control here. The routing rule is allowed to
  * misfire because this escape costs one tap; without it an imperfect detector
@@ -63,7 +69,10 @@ export default function CaptureConfirmation({
       role="status"
     >
       <div className="mx-auto flex max-w-3xl flex-wrap items-center gap-x-2 gap-y-1.5">
-        <span className="text-accent text-glow-sm">booked</span>
+        <span className="flex items-center gap-1 text-accent text-glow-sm">
+          <Check size={13} strokeWidth={3} />
+          saved to Finance
+        </span>
         <span className="text-accent/25">·</span>
 
         {single ? (
@@ -128,6 +137,17 @@ export default function CaptureConfirmation({
         )}
 
         <div className="ml-auto flex items-center gap-3">
+          <Link
+            href={
+              single
+                ? `/finance/transactions?highlight=${single.id}`
+                : '/finance/transactions'
+            }
+            onClick={onDismiss}
+            className="text-accent transition-colors hover:text-accent-dim"
+          >
+            view
+          </Link>
           <button
             type="button"
             onClick={() => run(onUndo)}
