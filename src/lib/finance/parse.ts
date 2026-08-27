@@ -53,6 +53,30 @@ export interface ParseFlag {
   detail: string;
 }
 
+/**
+ * Plain-language reason for each flag, for surfaces that show a stored
+ * parse_flags array rather than a live ParseFlag. A flag should explain itself
+ * — "MULTI_NUMBER" glowing on a row tells nobody anything.
+ */
+export const FLAG_EXPLANATIONS: Record<FlagCode, string> = {
+  UNSIGNED_INCOME_SUSPECT: 'Reads like income but had no + sign, so it was booked as an expense.',
+  SIGN_CONTRADICTS_WORDING: 'The sign says expense but the wording says income.',
+  AMBIGUOUS_DECIMAL_COMMA: 'A comma was used as a decimal point, against the usual grammar.',
+  INTERIOR_PLUS_SPLIT: 'One line held two amounts and was split into separate entries.',
+  INTERIOR_PLUS_JOINED: 'A + joined two purposes inside a single amount.',
+  MULTI_NUMBER: 'More than one number on the line — only the leading one became the amount.',
+  TRANSFER_SUSPECT: 'Reads as debt, a repayment or cash changing form, rather than spending.',
+  USD_REFERENCE: 'A $ figure appears in the comment. It is a reference, not the currency.',
+  BARE_SMALL_AMOUNT: 'A bare number under 1000 with no k/m suffix — possibly shorthand.',
+  EMPTY_COMMENT: 'An amount with nothing describing it.',
+  NO_AMOUNT: 'No amount could be read from this line.',
+};
+
+/** Look up an explanation for a stored flag string, unknown codes included. */
+export function explainFlag(code: string): string {
+  return FLAG_EXPLANATIONS[code as FlagCode] ?? code;
+}
+
 export interface ParsedTransaction {
   direction: Direction;
   /** Integer minor units, exponent 2. */

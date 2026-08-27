@@ -8,7 +8,8 @@ import ReconcileBlock from '@/components/finance/ReconcileBlock';
 import LoadingState from '@/components/ui/LoadingState';
 import EmptyState from '@/components/ui/EmptyState';
 import { formatMinor } from '@/lib/finance/format';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, ArrowRight } from 'lucide-react';
+import Link from 'next/link';
 
 export default function FinancePage() {
   const { summary, loading, error } = useFinanceSummary();
@@ -57,6 +58,14 @@ export default function FinancePage() {
       <div className="mx-auto max-w-3xl p-4 pb-8 lg:px-10 lg:py-6 page-enter">
         <SectionHeader title="WHERE DID MY MONEY GO" />
         <MonthTotalsHeader months={months} />
+
+        <Link
+          href="/finance/transactions"
+          className="mt-3 inline-flex items-center gap-1.5 font-mono text-xs text-accent
+            transition-colors hover:text-accent-dim"
+        >
+          All transactions <ArrowRight size={12} />
+        </Link>
 
         {inBoth.length > 0 && (
           <>
@@ -124,8 +133,13 @@ export default function FinancePage() {
             <span className="flex items-start gap-1.5">
               <AlertCircle size={12} className="mt-0.5 shrink-0 text-[#F59E0B]" />
               <span>
-                <span className="text-[#F59E0B]">{needsReviewCount}</span> flagged for
-                review — included in every total above. The flag means the capture was
+                <Link
+                  href="/finance/transactions?flagged=1"
+                  className="text-[#F59E0B] underline decoration-dotted underline-offset-2"
+                >
+                  {needsReviewCount} flagged for review
+                </Link>{' '}
+                — included in every total above. The flag means the capture was
                 ambiguous, not that the number is wrong.
               </span>
             </span>

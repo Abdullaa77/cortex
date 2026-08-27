@@ -11,6 +11,7 @@ import {
   CalendarCheck,
   ListChecks,
   Wallet,
+  Receipt,
   Settings,
 } from 'lucide-react';
 
@@ -28,16 +29,21 @@ const navItems = [
   { href: '/areas', label: 'Areas', icon: Layout },
   { href: '/ideas', label: 'Ideas', icon: Lightbulb },
   { href: '/finance', label: 'Finance', icon: Wallet },
+  { href: '/finance/transactions', label: 'Transactions', icon: Receipt },
   { href: '/review', label: 'Review', icon: CalendarCheck },
 ];
 
 export default function Sidebar({ inboxCount, reviewDue, disciplinePercent }: SidebarProps) {
   const pathname = usePathname();
 
-  const isActive = (href: string) => {
-    if (href === '/') return pathname === '/';
-    return pathname.startsWith(href);
-  };
+  // The most specific match wins, so /finance/transactions does not also light
+  // up /finance.
+  const bestMatch = navItems
+    .map((i) => i.href)
+    .filter((href) => (href === '/' ? pathname === '/' : pathname.startsWith(href)))
+    .sort((a, b) => b.length - a.length)[0];
+
+  const isActive = (href: string) => href === bestMatch;
 
   return (
     <aside
