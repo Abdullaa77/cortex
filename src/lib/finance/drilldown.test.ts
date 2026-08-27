@@ -32,6 +32,7 @@ const rows: TransactionRecord[] = imported.rows.map((r, i) => {
   const cat = r.categorySlug ? CATEGORY_BY_SLUG.get(r.categorySlug) : undefined;
   return {
     id: `row-${i}`,
+    reimburses_transaction_id: null,
     amount_minor: r.amountMinor,
     currency: 'UZS',
     direction: r.direction,

@@ -14,17 +14,20 @@ import OpeningBalanceCard from '@/components/finance/OpeningBalanceCard';
 import CategoryDrilldown, {
   type DrilldownTarget,
 } from '@/components/finance/CategoryDrilldown';
+import CategoryManager from '@/components/finance/CategoryManager';
 import LoadingState from '@/components/ui/LoadingState';
 import EmptyState from '@/components/ui/EmptyState';
 import { formatMinor } from '@/lib/finance/format';
 import { buildWaterfall } from '@/lib/finance/waterfall';
 import { ledgerFor } from '@/lib/finance/reconcile';
-import { AlertCircle, ArrowRight } from 'lucide-react';
+import { AlertCircle, ArrowRight, Tags } from 'lucide-react';
 
 export default function FinancePage() {
   const {
     rows,
     categories,
+    allCategories,
+    refetch,
     tabs,
     allMonths,
     reconciliation,
@@ -38,6 +41,8 @@ export default function FinancePage() {
     updateRow,
     deleteRow,
     acceptRow,
+    linkReimbursement,
+    unlinkReimbursement,
   } = useFinanceSummary();
 
   // A single month is the resting state. Comparison is a question you go and
@@ -45,6 +50,7 @@ export default function FinancePage() {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [comparing, setComparing] = useState(false);
   const [drilldown, setDrilldown] = useState<DrilldownTarget | null>(null);
+  const [managingCategories, setManagingCategories] = useState(false);
 
   // Derived rather than synced through an effect. The newest month with rows
   // is the default, and a selection that no longer exists — the last row in a
@@ -155,13 +161,23 @@ export default function FinancePage() {
           />
         </div>
 
-        <Link
-          href={`/finance/transactions?month=${activeKey}`}
-          className="mt-3 inline-flex items-center gap-1.5 font-mono text-xs text-accent
-            transition-colors hover:text-accent-dim"
-        >
-          All transactions <ArrowRight size={12} />
-        </Link>
+        <div className="mt-3 flex flex-wrap items-center gap-4">
+          <Link
+            href={`/finance/transactions?month=${activeKey}`}
+            className="inline-flex items-center gap-1.5 font-mono text-xs text-accent
+              transition-colors hover:text-accent-dim"
+          >
+            All transactions <ArrowRight size={12} />
+          </Link>
+          <button
+            type="button"
+            onClick={() => setManagingCategories(true)}
+            className="inline-flex items-center gap-1.5 font-mono text-xs text-text-muted
+              transition-colors hover:text-accent"
+          >
+            <Tags size={12} /> Categories
+          </button>
+        </div>
 
         <SectionHeader title="OPENING BALANCE" />
         <OpeningBalanceCard
@@ -254,6 +270,17 @@ export default function FinancePage() {
         onUpdate={updateRow}
         onDelete={deleteRow}
         onAccept={acceptRow}
+        onLink={linkReimbursement}
+        onUnlink={unlinkReimbursement}
+        onManageCategories={() => setManagingCategories(true)}
+      />
+
+      <CategoryManager
+        open={managingCategories}
+        onClose={() => setManagingCategories(false)}
+        categories={allCategories}
+        rows={rows}
+        onChanged={refetch}
       />
     </AppShell>
   );

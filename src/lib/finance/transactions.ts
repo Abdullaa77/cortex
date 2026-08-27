@@ -7,6 +7,11 @@
 
 import { monthKey, monthLabel } from './format.ts';
 import { classifyRow, categorySlugOf, type JoinedCategory } from './summarize.ts';
+import {
+  reimbursementsByTarget,
+  effectiveMinor,
+  isReimbursement,
+} from './links.ts';
 
 export interface TransactionRecord {
   id: string;
@@ -21,6 +26,8 @@ export interface TransactionRecord {
   parse_flags: string[];
   occurred_at: string;
   date_precision: 'day' | 'month';
+  /** Set on an incoming row, pointing at the expense it repays. */
+  reimburses_transaction_id: string | null;
   finance_categories: JoinedCategory | null;
 }
 
@@ -56,6 +63,14 @@ export function isSpendRow(row: TransactionRecord): boolean {
   return classifyRow(row) === 'spend';
 }
 
+/** True when this row is a repayment attached to an expense in the set. */
+export function isLinkedRepayment(
+  row: TransactionRecord,
+  rows: TransactionRecord[]
+): boolean {
+  return isReimbursement(row, reimbursementsByTarget(rows));
+}
+
 /**
  * The rows behind one category's figure for one month.
  *
@@ -72,19 +87,59 @@ export function drilldownRows(
   key: string,
   slug: string
 ): TransactionRecord[] {
+  const spend = rows.filter(
+    (row) =>
+      monthKey(row.occurred_at) === key &&
+      classifyRow(row) === 'spend' &&
+      categorySlugOf(row) === slug
+  );
+
+  // The repayments attached to those expenses come too. The figure above is
+  // net of them, so a list without them would be a list that does not add up —
+  // and the repayment is the explanation for why the number is what it is.
+  const ids = new Set(spend.map((r) => r.id));
+  const repayments = rows.filter(
+    (row) => row.reimburses_transaction_id && ids.has(row.reimburses_transaction_id)
+  );
+
+  return [...spend, ...repayments].sort((a, b) =>
+    b.occurred_at.localeCompare(a.occurred_at)
+  );
+}
+
+/**
+ * Sum of a set of rows, net of links, in minor units.
+ *
+ * A repaid expense counts its remainder and the repayment counts nothing, so
+ * passing an expense and its repayment together yields what the expense
+ * actually cost. That is the same arithmetic `categoryBreakdown` runs, which
+ * is why the drill-down total and the figure that opened it agree.
+ *
+ * Links are resolved against the rows given. Pass a whole set, not a slice, or
+ * a repayment whose expense was filtered out will read as a standalone row.
+ */
+export function sumMinor(rows: TransactionRecord[]): number {
+  const reimbursed = reimbursementsByTarget(rows);
+  return rows.reduce((n, r) => n + effectiveMinor(r, reimbursed), 0);
+}
+
+/** The rows repaying this one, newest first. Empty when nothing repays it. */
+export function repaymentsFor(
+  row: TransactionRecord,
+  rows: TransactionRecord[]
+): TransactionRecord[] {
   return rows
-    .filter(
-      (row) =>
-        monthKey(row.occurred_at) === key &&
-        classifyRow(row) === 'spend' &&
-        categorySlugOf(row) === slug
-    )
+    .filter((r) => r.reimburses_transaction_id === row.id)
     .sort((a, b) => b.occurred_at.localeCompare(a.occurred_at));
 }
 
-/** Sum of a set of rows, in minor units. */
-export function sumMinor(rows: TransactionRecord[]): number {
-  return rows.reduce((n, r) => n + r.amount_minor, 0);
+/** The expense this row repays, or null. */
+export function repaidTarget(
+  row: TransactionRecord,
+  rows: TransactionRecord[]
+): TransactionRecord | null {
+  if (!row.reimburses_transaction_id) return null;
+  return rows.find((r) => r.id === row.reimburses_transaction_id) ?? null;
 }
 
 export function filterTransactions(
@@ -105,6 +160,7 @@ export function filterTransactions(
 
 /** Newest month first; rows inside a month stay newest first too. */
 export function groupByMonth(rows: TransactionRecord[]): MonthGroup[] {
+  const reimbursed = reimbursementsByTarget(rows);
   const groups = new Map<string, TransactionRecord[]>();
   for (const row of rows) {
     const key = monthKey(row.occurred_at);
@@ -118,7 +174,9 @@ export function groupByMonth(rows: TransactionRecord[]): MonthGroup[] {
       key,
       label: `${monthLabel(key)} ${key.slice(0, 4)}`,
       rows: [...groupRows].sort((a, b) => b.occurred_at.localeCompare(a.occurred_at)),
-      spendMinor: groupRows.filter(isSpendRow).reduce((n, r) => n + r.amount_minor, 0),
+      spendMinor: groupRows
+        .filter(isSpendRow)
+        .reduce((n, r) => n + effectiveMinor(r, reimbursed), 0),
     }));
 }
 
@@ -184,11 +242,16 @@ export function listStats(
   all: TransactionRecord[],
   shown: TransactionRecord[]
 ): ListStats {
+  // Links are resolved against everything, not just what is on screen — a
+  // filter that hides a repayment must not make its expense read as unrepaid.
+  const reimbursed = reimbursementsByTarget(all);
   return {
     shown: shown.length,
     total: all.length,
     flagged: all.filter((r) => r.needs_review).length,
     uncategorised: all.filter((r) => r.finance_categories === null).length,
-    spendMinor: shown.filter(isSpendRow).reduce((n, r) => n + r.amount_minor, 0),
+    spendMinor: shown
+      .filter(isSpendRow)
+      .reduce((n, r) => n + effectiveMinor(r, reimbursed), 0),
   };
 }

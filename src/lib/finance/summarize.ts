@@ -6,6 +6,11 @@
  */
 
 import { monthKey, monthLabel } from './format.ts';
+import {
+  reimbursementsByTarget,
+  effectiveMinor,
+  type LinkableRow,
+} from './links.ts';
 
 /** Categories that make up the everyday floor, as opposed to one-off purchases. */
 export const CORE_SLUGS = ['groceries', 'transport', 'eating-out'] as const;
@@ -18,12 +23,14 @@ export interface JoinedCategory {
   kind: 'expense' | 'income' | 'transfer';
 }
 
-export interface TransactionRow {
+export interface TransactionRow extends LinkableRow {
+  id: string;
   amount_minor: number;
   direction: 'expense' | 'income';
   occurred_at: string;
   date_precision: 'day' | 'month';
   needs_review: boolean;
+  reimburses_transaction_id: string | null;
   finance_categories: JoinedCategory | null;
 }
 
@@ -165,6 +172,7 @@ function emptyTotals(key: string): MonthTotals {
  */
 export function monthTotals(rows: TransactionRow[]): MonthTotals[] {
   const totals = new Map<string, MonthTotals>();
+  const reimbursed = reimbursementsByTarget(rows);
 
   for (const row of rows) {
     const key = monthKey(row.occurred_at);
@@ -174,22 +182,31 @@ export function monthTotals(rows: TransactionRow[]): MonthTotals[] {
       totals.set(key, month);
     }
 
+    // Counted whatever it contributes. A repayment is still an entry that was
+    // captured, and hiding it from the count would make the list and the
+    // header disagree about how many rows the month has.
     month.txnCount++;
+
+    // Netted, not raw. A repaid expense contributes its remainder and the
+    // repayment contributes nothing — equal and opposite, so the month's net
+    // change is the same either way and the closing balance does not move.
+    const minor = effectiveMinor(row, reimbursed);
+    if (minor === 0) continue;
 
     switch (classifyRow(row)) {
       case 'transfer-in':
-        month.transferInMinor += row.amount_minor;
+        month.transferInMinor += minor;
         break;
       case 'transfer-out':
-        month.transferOutMinor += row.amount_minor;
+        month.transferOutMinor += minor;
         break;
       case 'income':
-        month.incomeMinor += row.amount_minor;
+        month.incomeMinor += minor;
         break;
       case 'spend':
-        month.spendMinor += row.amount_minor;
+        month.spendMinor += minor;
         if ((CORE_SLUGS as readonly string[]).includes(categorySlugOf(row)))
-          month.coreMinor += row.amount_minor;
+          month.coreMinor += minor;
         break;
     }
   }
@@ -209,14 +226,20 @@ export function categoryBreakdown(
 ): CategorySlice[] {
   const totals = new Map<string, number>();
   const meta = new Map<string, JoinedCategory>();
+  const reimbursed = reimbursementsByTarget(rows);
 
   for (const row of rows) {
     if (monthKey(row.occurred_at) !== key) continue;
     if (classifyRow(row) !== 'spend') continue;
 
+    // Net of anything that came back against it. This is the figure the
+    // drill-down has to reproduce.
+    const minor = effectiveMinor(row, reimbursed);
+    if (minor === 0) continue;
+
     const category = row.finance_categories ?? UNCATEGORISED;
     meta.set(category.slug, category);
-    totals.set(category.slug, (totals.get(category.slug) ?? 0) + row.amount_minor);
+    totals.set(category.slug, (totals.get(category.slug) ?? 0) + minor);
   }
 
   const monthSpend = [...totals.values()].reduce((n, v) => n + v, 0);
@@ -251,18 +274,22 @@ export function summarizeMonths(
   const wanted = new Set(keys);
   const perCategory = new Map<string, Map<string, number>>();
   const categoryMeta = new Map<string, JoinedCategory>();
+  const reimbursed = reimbursementsByTarget(rows);
 
   for (const row of rows) {
     const key = monthKey(row.occurred_at);
     if (!wanted.has(key)) continue;
     if (classifyRow(row) !== 'spend') continue;
 
+    const minor = effectiveMinor(row, reimbursed);
+    if (minor === 0) continue;
+
     const category = row.finance_categories ?? UNCATEGORISED;
     categoryMeta.set(category.slug, category);
 
     if (!perCategory.has(category.slug)) perCategory.set(category.slug, new Map());
     const byMonth = perCategory.get(category.slug)!;
-    byMonth.set(key, (byMonth.get(key) ?? 0) + row.amount_minor);
+    byMonth.set(key, (byMonth.get(key) ?? 0) + minor);
   }
 
   const earlierKey = keys[0];

@@ -18,9 +18,11 @@ const NOTES = readFileSync(
 );
 const imported = buildImport(NOTES, 2026);
 
-const rows: TransactionRow[] = imported.rows.map((r) => {
+const rows: TransactionRow[] = imported.rows.map((r, i) => {
   const cat = r.categorySlug ? CATEGORY_BY_SLUG.get(r.categorySlug) : undefined;
   return {
+    id: `row-${i}`,
+    reimburses_transaction_id: null,
     amount_minor: r.amountMinor,
     direction: r.direction,
     occurred_at: r.occurredAt,
