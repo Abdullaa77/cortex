@@ -4,12 +4,14 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { formatMinor } from '@/lib/finance/format';
 import { CATEGORIES } from '@/lib/finance/categorize';
+import { toDraftDateTime, fromDraftDateTime } from '@/lib/finance/edit';
 import type { CaptureBooking } from '@/hooks/useFinanceCapture';
-import { Check, X } from 'lucide-react';
+import { CalendarClock, Check, X } from 'lucide-react';
 
 interface CaptureConfirmationProps {
   booking: CaptureBooking;
   onSetCategory: (transactionId: string, comment: string, slug: string) => Promise<void>;
+  onSetOccurredAt: (transactionId: string, occurredAt: string) => Promise<void>;
   onUndo: () => Promise<void>;
   onNotMoney: () => Promise<void>;
   onDismiss: () => void;
@@ -27,15 +29,23 @@ interface CaptureConfirmationProps {
  * "not money" is the important control here. The routing rule is allowed to
  * misfire because this escape costs one tap; without it an imperfect detector
  * would quietly write wrong records.
+ *
+ * Date and time sit here for the same reason the category does: the row is
+ * already saved. Putting a picker in front of the input would tax every
+ * capture to serve the few that were not today. "-10k banana" and enter still
+ * books instantly; the date is a tap away afterwards, on the occasions it is
+ * wrong.
  */
 export default function CaptureConfirmation({
   booking,
   onSetCategory,
+  onSetOccurredAt,
   onUndo,
   onNotMoney,
   onDismiss,
 }: CaptureConfirmationProps) {
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [whenOpen, setWhenOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [rows, setRows] = useState(booking.rows);
 
@@ -62,6 +72,16 @@ export default function CaptureConfirmation({
   const currentCategory = single?.categorySlug
     ? CATEGORIES.find((c) => c.slug === single.categorySlug)
     : undefined;
+
+  const when = single ? toDraftDateTime(single.occurredAt) : { date: '', time: '' };
+
+  const chooseWhen = async (date: string, time: string) => {
+    if (!single) return;
+    const occurredAt = fromDraftDateTime(date, time);
+    if (!occurredAt) return;
+    setRows((curr) => curr.map((r) => ({ ...r, occurredAt })));
+    await run(() => onSetOccurredAt(single.id, occurredAt));
+  };
 
   return (
     <div
@@ -126,6 +146,56 @@ export default function CaptureConfirmation({
                 </div>
               )}
             </div>
+
+            <span className="text-accent/25">·</span>
+
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setWhenOpen((o) => !o)}
+                disabled={busy}
+                className="flex items-center gap-1 rounded-full border border-border px-2 py-0.5
+                  text-[11px] text-text-muted transition-colors hover:text-text-primary
+                  disabled:opacity-40"
+              >
+                <CalendarClock size={11} />
+                {whenLabel(single.occurredAt)}
+                <span className="ml-0.5 opacity-60">▾</span>
+              </button>
+
+              {whenOpen && (
+                <div
+                  className="absolute bottom-full left-0 z-50 mb-1.5 flex w-max flex-col gap-1.5
+                    rounded-lg border border-border bg-surface p-2 shadow-[0_0_20px_rgba(0,0,0,0.5)]"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="date"
+                      value={when.date}
+                      onChange={(e) => chooseWhen(e.target.value, when.time)}
+                      aria-label="Date"
+                      className="rounded border border-border bg-surface2 px-1.5 py-0.5 text-[11px]
+                        text-text-primary focus:border-accent/40 focus:outline-none"
+                    />
+                    <input
+                      type="time"
+                      value={when.time}
+                      onChange={(e) => chooseWhen(when.date, e.target.value)}
+                      aria-label="Time"
+                      className="rounded border border-border bg-surface2 px-1.5 py-0.5 text-[11px]
+                        text-text-primary focus:border-accent/40 focus:outline-none"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setWhenOpen(false)}
+                    className="self-end text-[11px] text-accent transition-colors hover:text-accent-dim"
+                  >
+                    done
+                  </button>
+                </div>
+              )}
+            </div>
           </>
         ) : (
           <>
@@ -177,4 +247,24 @@ export default function CaptureConfirmation({
       </div>
     </div>
   );
+}
+
+/**
+ * "now" while the row still carries the instant it was captured, and the real
+ * date once it has been moved. The strip is read at a glance — repeating
+ * today's date on every capture would be noise, and saying "now" makes the
+ * control's purpose obvious without a label.
+ */
+function whenLabel(iso: string): string {
+  const d = new Date(iso);
+  const now = new Date();
+  const sameDay =
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate();
+
+  if (sameDay && Math.abs(now.getTime() - d.getTime()) < 60_000) return 'now';
+  if (sameDay)
+    return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 }

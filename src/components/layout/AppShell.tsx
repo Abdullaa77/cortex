@@ -145,6 +145,7 @@ export default function AppShell({ children }: AppShellProps) {
           <CaptureConfirmation
             booking={booking}
             onSetCategory={finance.setCategory}
+            onSetOccurredAt={finance.setOccurredAt}
             onUndo={handleUndo}
             onNotMoney={handleNotMoney}
             onDismiss={() => setBooking(null)}
@@ -175,6 +176,7 @@ export default function AppShell({ children }: AppShellProps) {
               <CaptureConfirmation
                 booking={booking}
                 onSetCategory={finance.setCategory}
+            onSetOccurredAt={finance.setOccurredAt}
                 onUndo={handleUndo}
                 onNotMoney={handleNotMoney}
                 onDismiss={() => setBooking(null)}
