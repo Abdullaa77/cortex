@@ -21,8 +21,17 @@ export type { CategoryKind } from './categorize.ts';
 
 export const MAX_NAME_LENGTH = 40;
 
-/** Category slugs the app itself refers to. These may never be taken or freed. */
-export const RESERVED_SLUGS = ['uncategorised'] as const;
+/**
+ * Category slugs the app itself refers to. These may never be taken or freed.
+ *
+ * 'uncategorised' is the fallback `categorySlugOf` returns for a row with no
+ * category. 'unaccounted' is where every balance checkpoint files the gap
+ * between what was counted and what the ledger derived — deleting it would
+ * leave the next count with nowhere to put its adjustment, and the choice at
+ * that moment would be between losing the finding and burying it in a real
+ * category. Both are worse than a category that cannot be removed.
+ */
+export const RESERVED_SLUGS = ['uncategorised', 'unaccounted'] as const;
 
 export interface CategoryRecord {
   id: string;
@@ -165,7 +174,8 @@ export function buildUpdate(
   return patch;
 }
 
-export type RetireAction = 'delete' | 'archive';
+/** 'keep' means the app itself depends on this one — see RESERVED_SLUGS. */
+export type RetireAction = 'delete' | 'archive' | 'keep';
 
 export interface RetirePlan {
   action: RetireAction;
@@ -191,6 +201,16 @@ export function planRetire(
   category: CategoryRecord,
   usageCount: number
 ): RetirePlan {
+  // A reserved category is one the code names by slug. Retiring it does not
+  // remove a choice from a picker, it removes something the app depends on
+  // finding — the next count would have nowhere to file its adjustment.
+  if ((RESERVED_SLUGS as readonly string[]).includes(category.slug))
+    return {
+      action: 'keep',
+      usageCount,
+      explanation: `${category.name} is used by the app itself and cannot be removed.`,
+    };
+
   if (usageCount === 0)
     return {
       action: 'delete',

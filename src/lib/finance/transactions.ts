@@ -6,14 +6,20 @@
  */
 
 import { monthKey, monthLabel } from './format.ts';
-import { classifyRow, categorySlugOf, type JoinedCategory } from './summarize.ts';
+import {
+  classifyRow,
+  categorySlugOf,
+  countsTowardLedger,
+  type JoinedCategory,
+} from './summarize.ts';
+import type { AccountSides } from './accounts.ts';
 import {
   reimbursementsByTarget,
   effectiveMinor,
   isReimbursement,
 } from './links.ts';
 
-export interface TransactionRecord {
+export interface TransactionRecord extends AccountSides {
   id: string;
   amount_minor: number;
   currency: 'UZS' | 'USD';
@@ -28,7 +34,16 @@ export interface TransactionRecord {
   date_precision: 'day' | 'month';
   /** Set on an incoming row, pointing at the expense it repays. */
   reimburses_transaction_id: string | null;
+  /**
+   * The counterpart of a cross-currency transfer: 4,850,000 so'm leaving and
+   * $400 arriving are two movements at a rate someone agreed to, and one row
+   * cannot hold both amounts. See transfers.ts.
+   */
+  transfer_pair_id: string | null;
   finance_categories: JoinedCategory | null;
+  // from_account_id / to_account_id come from AccountSides. Which side a row
+  // touches is decided by what it COUNTS AS, never by `direction` — see
+  // sidesForClass in accounts.ts.
 }
 
 export interface TransactionFilters {
@@ -90,6 +105,10 @@ export function drilldownRows(
   const spend = rows.filter(
     (row) =>
       monthKey(row.occurred_at) === key &&
+      // Same currency rule as categoryBreakdown. If these two ever disagreed,
+      // the modal would list a row the figure above it does not contain, which
+      // is the exact failure the drill-down exists to be immune to.
+      countsTowardLedger(row) &&
       classifyRow(row) === 'spend' &&
       categorySlugOf(row) === slug
   );

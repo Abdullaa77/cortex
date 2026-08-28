@@ -44,6 +44,14 @@ export interface RowPatch {
   comment?: string;
   occurred_at?: string;
   date_precision?: DatePrecision;
+  /**
+   * Which account a row touched. Not produced by `buildRowPatch` — the edit
+   * form does not ask, because capture does not ask either. These come from
+   * the "needs the other side" queue, which is a different question asked in a
+   * different place: not "what was this?" but "where did it go?".
+   */
+  from_account_id?: string | null;
+  to_account_id?: string | null;
 }
 
 export interface BuildPatchResult {

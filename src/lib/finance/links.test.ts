@@ -53,6 +53,11 @@ function record(over: Partial<TransactionRecord> & { id: string }): TransactionR
     occurred_at: JULY,
     date_precision: 'day',
     reimburses_transaction_id: null,
+    transfer_pair_id: null,
+    // Unassigned by default: linking is decided by amount, direction and time,
+    // never by which account the money touched.
+    from_account_id: null,
+    to_account_id: null,
     finance_categories: joined(eatingOut),
     ...over,
   };

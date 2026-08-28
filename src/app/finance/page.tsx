@@ -10,7 +10,10 @@ import MonthCategoryList from '@/components/finance/MonthCategoryList';
 import CategoryRow from '@/components/finance/CategoryRow';
 import WaterfallChart from '@/components/finance/WaterfallChart';
 import ReconcileBlock from '@/components/finance/ReconcileBlock';
-import OpeningBalanceCard from '@/components/finance/OpeningBalanceCard';
+import PositionsCard from '@/components/finance/PositionsCard';
+import CountDialog from '@/components/finance/CountDialog';
+import TransferQueue from '@/components/finance/TransferQueue';
+import RateDialog from '@/components/finance/RateDialog';
 import CategoryDrilldown, {
   type DrilldownTarget,
 } from '@/components/finance/CategoryDrilldown';
@@ -20,7 +23,8 @@ import EmptyState from '@/components/ui/EmptyState';
 import { formatMinor } from '@/lib/finance/format';
 import { buildWaterfall } from '@/lib/finance/waterfall';
 import { ledgerFor } from '@/lib/finance/reconcile';
-import { AlertCircle, ArrowRight, Tags } from 'lucide-react';
+import { planResolution } from '@/lib/finance/transfers';
+import { AlertCircle, ArrowRight, Tags, SlidersHorizontal } from 'lucide-react';
 
 export default function FinancePage() {
   const {
@@ -31,7 +35,13 @@ export default function FinancePage() {
     tabs,
     allMonths,
     reconciliation,
-    opening,
+    accounts,
+    movements,
+    positions,
+    household,
+    historyFor,
+    openTransfers,
+    unaccountedCategoryId,
     flags,
     compareOn,
     breakdownOn,
@@ -43,6 +53,7 @@ export default function FinancePage() {
     acceptRow,
     linkReimbursement,
     unlinkReimbursement,
+    pairTransfer,
   } = useFinanceSummary();
 
   // A single month is the resting state. Comparison is a question you go and
@@ -51,6 +62,8 @@ export default function FinancePage() {
   const [comparing, setComparing] = useState(false);
   const [drilldown, setDrilldown] = useState<DrilldownTarget | null>(null);
   const [managingCategories, setManagingCategories] = useState(false);
+  const [countingId, setCountingId] = useState<string | null>(null);
+  const [settingRate, setSettingRate] = useState(false);
 
   // Derived rather than synced through an effect. The newest month with rows
   // is the default, and a selection that no longer exists — the last row in a
@@ -116,13 +129,47 @@ export default function FinancePage() {
     return (
       <AppShell>
         <div className="mx-auto max-w-3xl p-4 pb-8 lg:px-10 lg:py-6 page-enter">
-          <SectionHeader title="WHERE DID MY MONEY GO" />
+          <SectionHeader title="WHERE THE MONEY IS" />
+          <PositionsCard
+            positions={positions}
+            household={household}
+            onCount={setCountingId}
+            onSetRate={() => setSettingRate(true)}
+          />
+
+          <SectionHeader title="WHERE IT WENT" />
           <EmptyState
             title={error ? 'Could not load transactions.' : 'Nothing captured yet.'}
             description={
               error ??
               'Once transactions land, this shows where the money went, month by month.'
             }
+          />
+
+          <CountDialog
+            account={accounts.accounts.find((a) => a.id === countingId) ?? null}
+            checkpoints={accounts.checkpoints}
+            movements={movements}
+            history={historyFor(countingId ?? '')}
+            onClose={() => setCountingId(null)}
+            onSave={({ countedAt, countedMinor, note }) =>
+              accounts.recordCount({
+                accountId: countingId!,
+                countedAt,
+                countedMinor,
+                note,
+                movements,
+                unaccountedCategoryId,
+              })
+            }
+            onDeleteCheckpoint={accounts.deleteCheckpoint}
+          />
+
+          <RateDialog
+            open={settingRate}
+            settings={accounts.settings}
+            onClose={() => setSettingRate(false)}
+            onSave={accounts.saveSettings}
           />
         </div>
       </AppShell>
@@ -140,7 +187,16 @@ export default function FinancePage() {
   return (
     <AppShell>
       <div className="mx-auto max-w-3xl p-4 pb-8 lg:px-10 lg:py-6 page-enter">
-        <SectionHeader title="WHERE DID MY MONEY GO" />
+        <SectionHeader title="WHERE THE MONEY IS" />
+
+        <PositionsCard
+          positions={positions}
+          household={household}
+          onCount={setCountingId}
+          onSetRate={() => setSettingRate(true)}
+        />
+
+        <SectionHeader title="WHERE IT WENT" />
 
         <MonthTabs
           tabs={tabs}
@@ -177,15 +233,15 @@ export default function FinancePage() {
           >
             <Tags size={12} /> Categories
           </button>
+          <Link
+            href="/finance/cutover"
+            className="inline-flex items-center gap-1.5 font-mono text-xs text-text-muted
+              transition-colors hover:text-accent"
+          >
+            <SlidersHorizontal size={12} /> Accounts &amp; cutover
+          </Link>
         </div>
 
-        <SectionHeader title="OPENING BALANCE" />
-        <OpeningBalanceCard
-          reconciliation={reconciliation}
-          firstMonthLabel={tabs[0]?.label ?? null}
-          onSave={opening.save}
-          onClear={opening.clear}
-        />
 
         {chart && (
           <>
@@ -224,6 +280,32 @@ export default function FinancePage() {
         <SectionHeader title="RECONCILE" />
         <ReconcileBlock ledgers={shownLedgers} />
 
+        {openTransfers.length > 0 && (
+          <>
+            <SectionHeader
+              title="NEEDS THE OTHER SIDE"
+              count={`${openTransfers.length} transfers`}
+            />
+            <p className="-mt-1 mb-2 font-mono text-[10px] leading-relaxed text-text-muted/60">
+              Money that moved rather than left, with one end still unnamed. Nothing
+              here is guessed — you know where these went, and the app does not.
+            </p>
+            <TransferQueue
+              open={openTransfers}
+              accounts={accounts.activeAccounts}
+              onResolve={async (open, account, counterpartMinor) => {
+                const plan = planResolution(open, account, counterpartMinor);
+                if (plan.kind === 'refused') return plan.reason;
+                if (plan.kind === 'set-side') {
+                  await updateRow(open.row.id, plan.patch);
+                  return null;
+                }
+                return pairTransfer(open.row.id, plan.counterpart);
+              }}
+            />
+          </>
+        )}
+
         <SectionHeader title="DATA" />
         <div className="flex flex-col gap-2 font-mono text-[11px] text-text-muted">
           <span>
@@ -244,6 +326,18 @@ export default function FinancePage() {
                 </Link>{' '}
                 — included in every total above. The flag means the capture was
                 ambiguous, not that the number is wrong.
+              </span>
+            </span>
+          )}
+
+          {flags.foreignRowCount > 0 && (
+            <span className="flex items-start gap-1.5">
+              <AlertCircle size={12} className="mt-0.5 shrink-0 text-[#F59E0B]" />
+              <span>
+                {flags.foreignRowCount} rows are not in so&apos;m and are left out of
+                every figure above. They are counted in their own account&apos;s
+                position instead, natively — converting them here would put a
+                hand-entered rate underneath months of history.
               </span>
             </span>
           )}
@@ -273,6 +367,35 @@ export default function FinancePage() {
         onLink={linkReimbursement}
         onUnlink={unlinkReimbursement}
         onManageCategories={() => setManagingCategories(true)}
+      />
+
+      <CountDialog
+        account={accounts.accounts.find((a) => a.id === countingId) ?? null}
+        checkpoints={accounts.checkpoints}
+        movements={movements}
+        history={historyFor(countingId ?? '')}
+        onClose={() => setCountingId(null)}
+        onSave={({ countedAt, countedMinor, note }) =>
+          accounts.recordCount({
+            accountId: countingId!,
+            countedAt,
+            countedMinor,
+            note,
+            movements,
+            unaccountedCategoryId,
+          }).then((err) => {
+            if (!err) refetch();
+            return err;
+          })
+        }
+        onDeleteCheckpoint={accounts.deleteCheckpoint}
+      />
+
+      <RateDialog
+        open={settingRate}
+        settings={accounts.settings}
+        onClose={() => setSettingRate(false)}
+        onSave={accounts.saveSettings}
       />
 
       <CategoryManager

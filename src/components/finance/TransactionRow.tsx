@@ -10,6 +10,7 @@ import {
   type TransactionRecord,
 } from '@/lib/finance/transactions';
 import { linkCandidates, reimbursementsByTarget, effectiveMinor } from '@/lib/finance/links';
+import { planPairDeletion } from '@/lib/finance/transfers';
 import { buildRowPatch, toDraft, type RowDraft, type RowPatch } from '@/lib/finance/edit';
 import type { CategoryOption } from '@/hooks/useTransactions';
 import { AlertTriangle, Check, Link2, Link2Off, Pencil, Trash2, X } from 'lucide-react';
@@ -58,6 +59,18 @@ export default function TransactionRow({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  /**
+   * What this delete costs, worked out before it is offered rather than
+   * reported after. Deleting one leg of a cross-currency pair does not corrupt
+   * anything — the survivor goes back to the queue — but the rate the two
+   * observed only ever existed in their pairing, so it goes with them. That is
+   * worth one sentence in front of the click.
+   */
+  const pairDeletion = planPairDeletion(
+    { ...row, transfer_pair_id: row.transfer_pair_id ?? null },
+    allRows ?? [row]
+  );
   const [showFlags, setShowFlags] = useState(false);
   const [draft, setDraft] = useState<RowDraft>(() => toDraft(row));
   const [errors, setErrors] = useState<string[]>([]);
@@ -495,6 +508,13 @@ export default function TransactionRow({
           )}
         </div>
       </div>
+
+      {confirmDelete && pairDeletion.warning && (
+        <p className="mt-1.5 ml-16 border-l border-[#EF4444]/30 pl-2 font-mono text-[10px]
+          leading-relaxed text-text-muted">
+          <span className="text-[#EF4444]">deleting this</span> — {pairDeletion.warning}
+        </p>
+      )}
 
       {showFlags && row.parse_flags.length > 0 && (
         <ul className="mt-1.5 ml-16 flex flex-col gap-1 border-l border-[#F59E0B]/30 pl-2">

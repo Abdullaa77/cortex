@@ -87,6 +87,11 @@ export function useCategoryAdmin(
     async (category: CategoryRecord): Promise<string | null> => {
       const plan = planRetire(category, usageFor(category.id));
 
+      // A reserved category is one the code looks up by slug — 'unaccounted'
+      // is where every checkpoint files its gap. Refused here as well as in
+      // the manager, so a stale render cannot write what the rule forbids.
+      if (plan.action === 'keep') return plan.explanation;
+
       const { error } =
         plan.action === 'delete'
           ? await supabase.from('finance_categories').delete().eq('id', category.id)

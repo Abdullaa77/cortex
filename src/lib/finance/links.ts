@@ -30,6 +30,8 @@ export interface LinkableRow {
   amount_minor: number;
   direction: 'expense' | 'income';
   occurred_at: string;
+  /** Optional for the same reason as on ClassifiableRow — everything is so'm. */
+  currency?: 'UZS' | 'USD';
   /** Set on the incoming row, pointing at the expense it repays. */
   reimburses_transaction_id: string | null;
 }
@@ -127,6 +129,16 @@ export function canLink(
 
   if (target.reimburses_transaction_id)
     return { ok: false, reason: 'That row is itself a repayment.' };
+
+  // Netting subtracts one amount from the other, so the two amounts have to
+  // mean the same thing. $10 taken off a 166,100 so'm lunch would read as ten
+  // so'm and quietly understate the expense by almost nothing — the worst size
+  // of error, too small to notice and permanent.
+  if ((source.currency ?? 'UZS') !== (target.currency ?? 'UZS'))
+    return {
+      ok: false,
+      reason: 'Those are different currencies. One cannot be subtracted from the other.',
+    };
 
   if (monthKey(source.occurred_at) !== monthKey(target.occurred_at))
     return {
