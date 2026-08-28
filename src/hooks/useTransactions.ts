@@ -20,7 +20,8 @@ export interface CategoryOption {
 const SELECT =
   'id, amount_minor, currency, direction, comment, raw_input, category_id, ' +
   'category_source, needs_review, parse_flags, occurred_at, date_precision, ' +
-  'reimburses_transaction_id, finance_categories(slug, name, icon, color, kind)';
+  'reimburses_transaction_id, from_account_id, to_account_id, transfer_pair_id, ' +
+  'finance_categories(slug, name, icon, color, kind)';
 
 /**
  * The transactions log. Optimistic with rollback, matching the other hooks —
@@ -138,15 +139,26 @@ export function useTransactions() {
       setRows((curr) =>
         curr
           .filter((r) => r.id !== transactionId)
-          // The column is ON DELETE SET NULL, so anything repaying this row is
-          // un-linked rather than deleted. Mirrored here, or the repayment
-          // would keep pointing at a row that is gone until the next fetch and
-          // read as netted against nothing.
-          .map((r) =>
-            r.reimburses_transaction_id === transactionId
-              ? { ...r, reimburses_transaction_id: null }
-              : r
-          )
+          // Both pointer columns are ON DELETE SET NULL, so whatever pointed at
+          // this row is un-linked rather than deleted. Mirrored here, or the
+          // local copy keeps pointing at a row that is gone until the next
+          // fetch.
+          //
+          // The repayment case reads as netted against nothing. The transfer
+          // case is quieter and worse: the surviving leg of a cross-currency
+          // pair would still look answered — its counterpart names where the
+          // money went — while that counterpart no longer exists. It would sit
+          // out of the "needs the other side" queue, silently complete, until
+          // something forced a refetch. A half-deleted pair has to become
+          // visibly unanswered immediately, because being asked again is the
+          // only thing that recovers what the deletion cost.
+          .map((r) => {
+            const next = { ...r };
+            if (r.reimburses_transaction_id === transactionId)
+              next.reimburses_transaction_id = null;
+            if (r.transfer_pair_id === transactionId) next.transfer_pair_id = null;
+            return next;
+          })
       );
 
       const { error: err } = await supabase
@@ -214,6 +226,76 @@ export function useTransactions() {
     [supabase, rows]
   );
 
+  /**
+   * Answer a cross-currency transfer by writing its other half.
+   *
+   * 4,850,000 so'm leaving and $400 arriving are two movements at a rate
+   * somebody agreed to, and one row cannot hold both amounts without electing
+   * one of them as the truth. So the counterpart is written in the
+   * destination's own currency and the two rows are pointed at each other.
+   *
+   * The insert goes first and the pairing second, in the order that fails
+   * safely: a counterpart with no pair is a visible, deletable row saying money
+   * arrived, while a pair pointing at a row that was never written is a
+   * dangling reference the read path would have to defend against.
+   */
+  const pairTransfer = useCallback(
+    async (
+      rowId: string,
+      counterpart: {
+        amount_minor: number;
+        currency: 'UZS' | 'USD';
+        direction: 'expense' | 'income';
+        from_account_id: string | null;
+        to_account_id: string | null;
+        occurred_at: string;
+        comment: string;
+        raw_input: string;
+        category_slug: string;
+      }
+    ): Promise<string | null> => {
+      if (!userId) return 'Not signed in.';
+      const category = allCategories.find((c) => c.slug === counterpart.category_slug);
+
+      const { data, error: insertErr } = await supabase
+        .from('transactions')
+        .insert({
+          user_id: userId,
+          category_id: category?.id ?? null,
+          direction: counterpart.direction,
+          amount_minor: counterpart.amount_minor,
+          currency: counterpart.currency,
+          comment: counterpart.comment,
+          raw_input: counterpart.raw_input,
+          category_source: 'manual',
+          needs_review: false,
+          occurred_at: counterpart.occurred_at,
+          date_precision: 'day',
+          from_account_id: counterpart.from_account_id,
+          to_account_id: counterpart.to_account_id,
+          transfer_pair_id: rowId,
+        })
+        .select('id')
+        .single();
+
+      if (insertErr) return insertErr.message;
+
+      const { error: linkErr } = await supabase
+        .from('transactions')
+        .update({ transfer_pair_id: data.id })
+        .eq('id', rowId);
+
+      if (linkErr) {
+        await supabase.from('transactions').delete().eq('id', data.id);
+        return linkErr.message;
+      }
+
+      await fetchAll();
+      return null;
+    },
+    [supabase, userId, allCategories, fetchAll]
+  );
+
   /** Detach. Both rows keep their amounts, so this restores the earlier totals. */
   const unlinkReimbursement = useCallback(
     async (sourceId: string) => {
@@ -253,5 +335,6 @@ export function useTransactions() {
     acceptRow,
     linkReimbursement,
     unlinkReimbursement,
+    pairTransfer,
   };
 }

@@ -1,0 +1,2909 @@
+{
+  "import": {
+    "linesRead": 154,
+    "rowCount": 153,
+    "needsReview": 27,
+    "skipped": [],
+    "byMonth": {
+      "2026-07": {
+        "spendMinor": 345196138,
+        "incomeMinor": 242791164,
+        "transferMinor": 555200000
+      },
+      "2026-08": {
+        "spendMinor": 599695415,
+        "incomeMinor": 756000000,
+        "transferMinor": 196703500
+      }
+    },
+    "spendByCategory": {
+      "2026-07": {
+        "clothing": 25000000,
+        "eating-out": 60060000,
+        "ehsan": 16350000,
+        "entertainment": 7500000,
+        "gifts-events": 10000000,
+        "groceries": 60842350,
+        "grooming": 31204000,
+        "health": 28050000,
+        "phone-internet": 11318200,
+        "transport": 21032567,
+        "travel": 48000000,
+        "utilities": 7500000,
+        "work-tools": 18339021
+      },
+      "2026-08": {
+        "(uncategorised)": 2850000,
+        "clothing": 101890000,
+        "documents": 162531800,
+        "eating-out": 44130000,
+        "ehsan": 37970900,
+        "entertainment": 7450000,
+        "gifts-events": 10000000,
+        "groceries": 84041800,
+        "health": 5060000,
+        "investment": 10000000,
+        "phone-internet": 26513100,
+        "transport": 15715500,
+        "travel": 71300000,
+        "work-tools": 20242315
+      }
+    }
+  },
+  "summary": {
+    "months": [
+      {
+        "key": "2026-07",
+        "label": "JULY",
+        "spendMinor": 345196138,
+        "incomeMinor": 242791164,
+        "transferInMinor": 16000000,
+        "transferOutMinor": 539200000,
+        "txnCount": 65,
+        "coreMinor": 141934917
+      },
+      {
+        "key": "2026-08",
+        "label": "AUGUST",
+        "spendMinor": 599695415,
+        "incomeMinor": 756000000,
+        "transferInMinor": 26903500,
+        "transferOutMinor": 169800000,
+        "txnCount": 88,
+        "coreMinor": 143887300
+      }
+    ],
+    "inBoth": [
+      {
+        "slug": "groceries",
+        "name": "Groceries",
+        "icon": "⌗",
+        "color": "#00FF88",
+        "earlierMinor": 60842350,
+        "laterMinor": 84041800,
+        "totalMinor": 144884150,
+        "deltaMinor": 23199450,
+        "inBoth": true
+      },
+      {
+        "slug": "clothing",
+        "name": "Clothing",
+        "icon": "◇",
+        "color": "#EC4899",
+        "earlierMinor": 25000000,
+        "laterMinor": 101890000,
+        "totalMinor": 126890000,
+        "deltaMinor": 76890000,
+        "inBoth": true
+      },
+      {
+        "slug": "travel",
+        "name": "Travel",
+        "icon": "↗",
+        "color": "#3B82F6",
+        "earlierMinor": 48000000,
+        "laterMinor": 71300000,
+        "totalMinor": 119300000,
+        "deltaMinor": 23300000,
+        "inBoth": true
+      },
+      {
+        "slug": "eating-out",
+        "name": "Eating out",
+        "icon": "◐",
+        "color": "#F59E0B",
+        "earlierMinor": 60060000,
+        "laterMinor": 44130000,
+        "totalMinor": 104190000,
+        "deltaMinor": -15930000,
+        "inBoth": true
+      },
+      {
+        "slug": "ehsan",
+        "name": "Ehsan",
+        "icon": "☾",
+        "color": "#D4AF37",
+        "earlierMinor": 16350000,
+        "laterMinor": 37970900,
+        "totalMinor": 54320900,
+        "deltaMinor": 21620900,
+        "inBoth": true
+      },
+      {
+        "slug": "work-tools",
+        "name": "Work tools",
+        "icon": "{}",
+        "color": "#00FF88",
+        "earlierMinor": 18339021,
+        "laterMinor": 20242315,
+        "totalMinor": 38581336,
+        "deltaMinor": 1903294,
+        "inBoth": true
+      },
+      {
+        "slug": "phone-internet",
+        "name": "Phone + net",
+        "icon": "◈",
+        "color": "#3B82F6",
+        "earlierMinor": 11318200,
+        "laterMinor": 26513100,
+        "totalMinor": 37831300,
+        "deltaMinor": 15194900,
+        "inBoth": true
+      },
+      {
+        "slug": "transport",
+        "name": "Transport",
+        "icon": "→",
+        "color": "#06B6D4",
+        "earlierMinor": 21032567,
+        "laterMinor": 15715500,
+        "totalMinor": 36748067,
+        "deltaMinor": -5317067,
+        "inBoth": true
+      },
+      {
+        "slug": "health",
+        "name": "Health",
+        "icon": "♥",
+        "color": "#EF4444",
+        "earlierMinor": 28050000,
+        "laterMinor": 5060000,
+        "totalMinor": 33110000,
+        "deltaMinor": -22990000,
+        "inBoth": true
+      },
+      {
+        "slug": "gifts-events",
+        "name": "Gifts + events",
+        "icon": "❋",
+        "color": "#EC4899",
+        "earlierMinor": 10000000,
+        "laterMinor": 10000000,
+        "totalMinor": 20000000,
+        "deltaMinor": 0,
+        "inBoth": true
+      },
+      {
+        "slug": "entertainment",
+        "name": "Entertainment",
+        "icon": "◉",
+        "color": "#F59E0B",
+        "earlierMinor": 7500000,
+        "laterMinor": 7450000,
+        "totalMinor": 14950000,
+        "deltaMinor": -50000,
+        "inBoth": true
+      }
+    ],
+    "oneMonthOnly": [
+      {
+        "slug": "documents",
+        "name": "Documents",
+        "icon": "▤",
+        "color": "#8B5CF6",
+        "earlierMinor": 0,
+        "laterMinor": 162531800,
+        "totalMinor": 162531800,
+        "deltaMinor": 162531800,
+        "inBoth": false
+      },
+      {
+        "slug": "grooming",
+        "name": "Grooming",
+        "icon": "✂",
+        "color": "#EC4899",
+        "earlierMinor": 31204000,
+        "laterMinor": 0,
+        "totalMinor": 31204000,
+        "deltaMinor": -31204000,
+        "inBoth": false
+      },
+      {
+        "slug": "investment",
+        "name": "Investment",
+        "icon": "↑",
+        "color": "#22C55E",
+        "earlierMinor": 0,
+        "laterMinor": 10000000,
+        "totalMinor": 10000000,
+        "deltaMinor": 10000000,
+        "inBoth": false
+      },
+      {
+        "slug": "utilities",
+        "name": "Utilities",
+        "icon": "⌂",
+        "color": "#6B7280",
+        "earlierMinor": 7500000,
+        "laterMinor": 0,
+        "totalMinor": 7500000,
+        "deltaMinor": -7500000,
+        "inBoth": false
+      },
+      {
+        "slug": "uncategorised",
+        "name": "Uncategorised",
+        "icon": "?",
+        "color": "#6B7280",
+        "earlierMinor": 0,
+        "laterMinor": 2850000,
+        "totalMinor": 2850000,
+        "deltaMinor": 2850000,
+        "inBoth": false
+      }
+    ],
+    "needsReviewCount": 27,
+    "monthPrecisionCount": 153,
+    "totalRows": 153
+  },
+  "categoryBreakdown": {
+    "2026-07": [
+      {
+        "slug": "groceries",
+        "name": "Groceries",
+        "icon": "⌗",
+        "color": "#00FF88",
+        "minor": 60842350,
+        "share": 0.17625443422544895
+      },
+      {
+        "slug": "eating-out",
+        "name": "Eating out",
+        "icon": "◐",
+        "color": "#F59E0B",
+        "minor": 60060000,
+        "share": 0.1739880415463976
+      },
+      {
+        "slug": "travel",
+        "name": "Travel",
+        "icon": "↗",
+        "color": "#3B82F6",
+        "minor": 48000000,
+        "share": 0.1390513818552628
+      },
+      {
+        "slug": "grooming",
+        "name": "Grooming",
+        "icon": "✂",
+        "color": "#EC4899",
+        "minor": 31204000,
+        "share": 0.09039498582107544
+      },
+      {
+        "slug": "health",
+        "name": "Health",
+        "icon": "♥",
+        "color": "#EF4444",
+        "minor": 28050000,
+        "share": 0.08125815127166922
+      },
+      {
+        "slug": "clothing",
+        "name": "Clothing",
+        "icon": "◇",
+        "color": "#EC4899",
+        "minor": 25000000,
+        "share": 0.07242259471628272
+      },
+      {
+        "slug": "transport",
+        "name": "Transport",
+        "icon": "→",
+        "color": "#06B6D4",
+        "minor": 21032567,
+        "share": 0.06092932302736249
+      },
+      {
+        "slug": "work-tools",
+        "name": "Work tools",
+        "icon": "{}",
+        "color": "#00FF88",
+        "minor": 18339021,
+        "share": 0.053126379415055915
+      },
+      {
+        "slug": "ehsan",
+        "name": "Ehsan",
+        "icon": "☾",
+        "color": "#D4AF37",
+        "minor": 16350000,
+        "share": 0.0473643769444489
+      },
+      {
+        "slug": "phone-internet",
+        "name": "Phone + net",
+        "icon": "◈",
+        "color": "#3B82F6",
+        "minor": 11318200,
+        "share": 0.03278773646071324
+      },
+      {
+        "slug": "gifts-events",
+        "name": "Gifts + events",
+        "icon": "❋",
+        "color": "#EC4899",
+        "minor": 10000000,
+        "share": 0.028969037886513088
+      },
+      {
+        "slug": "utilities",
+        "name": "Utilities",
+        "icon": "⌂",
+        "color": "#6B7280",
+        "minor": 7500000,
+        "share": 0.021726778414884816
+      },
+      {
+        "slug": "entertainment",
+        "name": "Entertainment",
+        "icon": "◉",
+        "color": "#F59E0B",
+        "minor": 7500000,
+        "share": 0.021726778414884816
+      }
+    ],
+    "2026-08": [
+      {
+        "slug": "documents",
+        "name": "Documents",
+        "icon": "▤",
+        "color": "#8B5CF6",
+        "minor": 162531800,
+        "share": 0.27102391636594386
+      },
+      {
+        "slug": "clothing",
+        "name": "Clothing",
+        "icon": "◇",
+        "color": "#EC4899",
+        "minor": 101890000,
+        "share": 0.16990291646635317
+      },
+      {
+        "slug": "groceries",
+        "name": "Groceries",
+        "icon": "⌗",
+        "color": "#00FF88",
+        "minor": 84041800,
+        "share": 0.14014080797999764
+      },
+      {
+        "slug": "travel",
+        "name": "Travel",
+        "icon": "↗",
+        "color": "#3B82F6",
+        "minor": 71300000,
+        "share": 0.11889368872363315
+      },
+      {
+        "slug": "eating-out",
+        "name": "Eating out",
+        "icon": "◐",
+        "color": "#F59E0B",
+        "minor": 44130000,
+        "share": 0.07358735600804953
+      },
+      {
+        "slug": "ehsan",
+        "name": "Ehsan",
+        "icon": "☾",
+        "color": "#D4AF37",
+        "minor": 37970900,
+        "share": 0.06331697566838992
+      },
+      {
+        "slug": "phone-internet",
+        "name": "Phone + net",
+        "icon": "◈",
+        "color": "#3B82F6",
+        "minor": 26513100,
+        "share": 0.04421094331695032
+      },
+      {
+        "slug": "work-tools",
+        "name": "Work tools",
+        "icon": "{}",
+        "color": "#00FF88",
+        "minor": 20242315,
+        "share": 0.03375432676936508
+      },
+      {
+        "slug": "transport",
+        "name": "Transport",
+        "icon": "→",
+        "color": "#06B6D4",
+        "minor": 15715500,
+        "share": 0.02620580315759126
+      },
+      {
+        "slug": "gifts-events",
+        "name": "Gifts + events",
+        "icon": "❋",
+        "color": "#EC4899",
+        "minor": 10000000,
+        "share": 0.016675131658293568
+      },
+      {
+        "slug": "investment",
+        "name": "Investment",
+        "icon": "↑",
+        "color": "#22C55E",
+        "minor": 10000000,
+        "share": 0.016675131658293568
+      },
+      {
+        "slug": "entertainment",
+        "name": "Entertainment",
+        "icon": "◉",
+        "color": "#F59E0B",
+        "minor": 7450000,
+        "share": 0.01242297308542871
+      },
+      {
+        "slug": "health",
+        "name": "Health",
+        "icon": "♥",
+        "color": "#EF4444",
+        "minor": 5060000,
+        "share": 0.008437616619096545
+      },
+      {
+        "slug": "uncategorised",
+        "name": "Uncategorised",
+        "icon": "?",
+        "color": "#6B7280",
+        "minor": 2850000,
+        "share": 0.004752412522613667
+      }
+    ]
+  },
+  "reconciliation": {
+    "withOpening": {
+      "months": [
+        {
+          "key": "2026-07",
+          "label": "JULY",
+          "openingMinor": 800000000,
+          "incomeMinor": 242791164,
+          "spendMinor": 345196138,
+          "transferInMinor": 16000000,
+          "transferOutMinor": 539200000,
+          "netMinor": -625604974,
+          "closingMinor": 174395026,
+          "impossible": false,
+          "shortfallMinor": 0
+        },
+        {
+          "key": "2026-08",
+          "label": "AUGUST",
+          "openingMinor": 174395026,
+          "incomeMinor": 756000000,
+          "spendMinor": 599695415,
+          "transferInMinor": 26903500,
+          "transferOutMinor": 169800000,
+          "netMinor": 13408085,
+          "closingMinor": 187803111,
+          "impossible": false,
+          "shortfallMinor": 0
+        }
+      ],
+      "opening": {
+        "amountMinor": 800000000,
+        "asOf": "2026-07-01"
+      },
+      "requiredOpeningMinor": 625604974,
+      "firstMonthKey": "2026-07",
+      "closingMinor": 187803111,
+      "impossibleKeys": []
+    },
+    "withoutOpening": {
+      "months": [
+        {
+          "key": "2026-07",
+          "label": "JULY",
+          "openingMinor": null,
+          "incomeMinor": 242791164,
+          "spendMinor": 345196138,
+          "transferInMinor": 16000000,
+          "transferOutMinor": 539200000,
+          "netMinor": -625604974,
+          "closingMinor": null,
+          "impossible": false,
+          "shortfallMinor": 0
+        },
+        {
+          "key": "2026-08",
+          "label": "AUGUST",
+          "openingMinor": null,
+          "incomeMinor": 756000000,
+          "spendMinor": 599695415,
+          "transferInMinor": 26903500,
+          "transferOutMinor": 169800000,
+          "netMinor": 13408085,
+          "closingMinor": null,
+          "impossible": false,
+          "shortfallMinor": 0
+        }
+      ],
+      "opening": null,
+      "requiredOpeningMinor": 625604974,
+      "firstMonthKey": "2026-07",
+      "closingMinor": null,
+      "impossibleKeys": []
+    }
+  },
+  "waterfall": {
+    "2026-07": {
+      "withOpening": {
+        "steps": [
+          {
+            "kind": "opening",
+            "id": "opening",
+            "label": "Opening",
+            "color": "#6B7280",
+            "deltaMinor": 0,
+            "isTotal": true,
+            "drilldownSlug": null,
+            "startMinor": 800000000,
+            "endMinor": 800000000,
+            "amountLabel": "8.0m"
+          },
+          {
+            "kind": "income",
+            "id": "income",
+            "label": "Income",
+            "color": "#00FF88",
+            "deltaMinor": 242791164,
+            "isTotal": false,
+            "drilldownSlug": null,
+            "startMinor": 800000000,
+            "endMinor": 1042791164,
+            "amountLabel": "+2.4m"
+          },
+          {
+            "kind": "transfer-in",
+            "id": "transfer-in",
+            "label": "Moved in",
+            "color": "#6B7280",
+            "deltaMinor": 16000000,
+            "isTotal": false,
+            "drilldownSlug": null,
+            "startMinor": 1042791164,
+            "endMinor": 1058791164,
+            "amountLabel": "+160k"
+          },
+          {
+            "kind": "category",
+            "id": "groceries",
+            "label": "Groceries",
+            "color": "#00FF88",
+            "deltaMinor": -60842350,
+            "isTotal": false,
+            "drilldownSlug": "groceries",
+            "startMinor": 1058791164,
+            "endMinor": 997948814,
+            "amountLabel": "-608k"
+          },
+          {
+            "kind": "category",
+            "id": "eating-out",
+            "label": "Eating out",
+            "color": "#F59E0B",
+            "deltaMinor": -60060000,
+            "isTotal": false,
+            "drilldownSlug": "eating-out",
+            "startMinor": 997948814,
+            "endMinor": 937888814,
+            "amountLabel": "-601k"
+          },
+          {
+            "kind": "category",
+            "id": "travel",
+            "label": "Travel",
+            "color": "#3B82F6",
+            "deltaMinor": -48000000,
+            "isTotal": false,
+            "drilldownSlug": "travel",
+            "startMinor": 937888814,
+            "endMinor": 889888814,
+            "amountLabel": "-480k"
+          },
+          {
+            "kind": "category",
+            "id": "grooming",
+            "label": "Grooming",
+            "color": "#EC4899",
+            "deltaMinor": -31204000,
+            "isTotal": false,
+            "drilldownSlug": "grooming",
+            "startMinor": 889888814,
+            "endMinor": 858684814,
+            "amountLabel": "-312k"
+          },
+          {
+            "kind": "category",
+            "id": "health",
+            "label": "Health",
+            "color": "#EF4444",
+            "deltaMinor": -28050000,
+            "isTotal": false,
+            "drilldownSlug": "health",
+            "startMinor": 858684814,
+            "endMinor": 830634814,
+            "amountLabel": "-281k"
+          },
+          {
+            "kind": "category",
+            "id": "clothing",
+            "label": "Clothing",
+            "color": "#EC4899",
+            "deltaMinor": -25000000,
+            "isTotal": false,
+            "drilldownSlug": "clothing",
+            "startMinor": 830634814,
+            "endMinor": 805634814,
+            "amountLabel": "-250k"
+          },
+          {
+            "kind": "other",
+            "id": "other",
+            "label": "Other (7)",
+            "color": "#4B5563",
+            "deltaMinor": -92039788,
+            "isTotal": false,
+            "drilldownSlug": null,
+            "startMinor": 805634814,
+            "endMinor": 713595026,
+            "amountLabel": "-920k"
+          },
+          {
+            "kind": "transfer-out",
+            "id": "transfer-out",
+            "label": "Moved out",
+            "color": "#6B7280",
+            "deltaMinor": -539200000,
+            "isTotal": false,
+            "drilldownSlug": null,
+            "startMinor": 713595026,
+            "endMinor": 174395026,
+            "amountLabel": "-5.4m"
+          },
+          {
+            "kind": "closing",
+            "id": "closing",
+            "label": "Closing",
+            "color": "#00FF88",
+            "deltaMinor": 0,
+            "isTotal": true,
+            "drilldownSlug": null,
+            "startMinor": 174395026,
+            "endMinor": 174395026,
+            "amountLabel": "1.7m"
+          }
+        ],
+        "minMinor": 0,
+        "maxMinor": 1058791164,
+        "crossesZero": false,
+        "collapsedCount": 7,
+        "relative": false
+      },
+      "withoutOpening": {
+        "steps": [
+          {
+            "kind": "opening",
+            "id": "opening",
+            "label": "Start",
+            "color": "#6B7280",
+            "deltaMinor": 0,
+            "isTotal": true,
+            "drilldownSlug": null,
+            "startMinor": 0,
+            "endMinor": 0,
+            "amountLabel": "0"
+          },
+          {
+            "kind": "income",
+            "id": "income",
+            "label": "Income",
+            "color": "#00FF88",
+            "deltaMinor": 242791164,
+            "isTotal": false,
+            "drilldownSlug": null,
+            "startMinor": 0,
+            "endMinor": 242791164,
+            "amountLabel": "+2.4m"
+          },
+          {
+            "kind": "transfer-in",
+            "id": "transfer-in",
+            "label": "Moved in",
+            "color": "#6B7280",
+            "deltaMinor": 16000000,
+            "isTotal": false,
+            "drilldownSlug": null,
+            "startMinor": 242791164,
+            "endMinor": 258791164,
+            "amountLabel": "+160k"
+          },
+          {
+            "kind": "category",
+            "id": "groceries",
+            "label": "Groceries",
+            "color": "#00FF88",
+            "deltaMinor": -60842350,
+            "isTotal": false,
+            "drilldownSlug": "groceries",
+            "startMinor": 258791164,
+            "endMinor": 197948814,
+            "amountLabel": "-608k"
+          },
+          {
+            "kind": "category",
+            "id": "eating-out",
+            "label": "Eating out",
+            "color": "#F59E0B",
+            "deltaMinor": -60060000,
+            "isTotal": false,
+            "drilldownSlug": "eating-out",
+            "startMinor": 197948814,
+            "endMinor": 137888814,
+            "amountLabel": "-601k"
+          },
+          {
+            "kind": "category",
+            "id": "travel",
+            "label": "Travel",
+            "color": "#3B82F6",
+            "deltaMinor": -48000000,
+            "isTotal": false,
+            "drilldownSlug": "travel",
+            "startMinor": 137888814,
+            "endMinor": 89888814,
+            "amountLabel": "-480k"
+          },
+          {
+            "kind": "category",
+            "id": "grooming",
+            "label": "Grooming",
+            "color": "#EC4899",
+            "deltaMinor": -31204000,
+            "isTotal": false,
+            "drilldownSlug": "grooming",
+            "startMinor": 89888814,
+            "endMinor": 58684814,
+            "amountLabel": "-312k"
+          },
+          {
+            "kind": "category",
+            "id": "health",
+            "label": "Health",
+            "color": "#EF4444",
+            "deltaMinor": -28050000,
+            "isTotal": false,
+            "drilldownSlug": "health",
+            "startMinor": 58684814,
+            "endMinor": 30634814,
+            "amountLabel": "-281k"
+          },
+          {
+            "kind": "category",
+            "id": "clothing",
+            "label": "Clothing",
+            "color": "#EC4899",
+            "deltaMinor": -25000000,
+            "isTotal": false,
+            "drilldownSlug": "clothing",
+            "startMinor": 30634814,
+            "endMinor": 5634814,
+            "amountLabel": "-250k"
+          },
+          {
+            "kind": "other",
+            "id": "other",
+            "label": "Other (7)",
+            "color": "#4B5563",
+            "deltaMinor": -92039788,
+            "isTotal": false,
+            "drilldownSlug": null,
+            "startMinor": 5634814,
+            "endMinor": -86404974,
+            "amountLabel": "-920k"
+          },
+          {
+            "kind": "transfer-out",
+            "id": "transfer-out",
+            "label": "Moved out",
+            "color": "#6B7280",
+            "deltaMinor": -539200000,
+            "isTotal": false,
+            "drilldownSlug": null,
+            "startMinor": -86404974,
+            "endMinor": -625604974,
+            "amountLabel": "-5.4m"
+          },
+          {
+            "kind": "closing",
+            "id": "closing",
+            "label": "Net",
+            "color": "#EF4444",
+            "deltaMinor": 0,
+            "isTotal": true,
+            "drilldownSlug": null,
+            "startMinor": -625604974,
+            "endMinor": -625604974,
+            "amountLabel": "-6.3m"
+          }
+        ],
+        "minMinor": -625604974,
+        "maxMinor": 258791164,
+        "crossesZero": true,
+        "collapsedCount": 7,
+        "relative": true
+      }
+    },
+    "2026-08": {
+      "withOpening": {
+        "steps": [
+          {
+            "kind": "opening",
+            "id": "opening",
+            "label": "Opening",
+            "color": "#6B7280",
+            "deltaMinor": 0,
+            "isTotal": true,
+            "drilldownSlug": null,
+            "startMinor": 174395026,
+            "endMinor": 174395026,
+            "amountLabel": "1.7m"
+          },
+          {
+            "kind": "income",
+            "id": "income",
+            "label": "Income",
+            "color": "#00FF88",
+            "deltaMinor": 756000000,
+            "isTotal": false,
+            "drilldownSlug": null,
+            "startMinor": 174395026,
+            "endMinor": 930395026,
+            "amountLabel": "+7.6m"
+          },
+          {
+            "kind": "transfer-in",
+            "id": "transfer-in",
+            "label": "Moved in",
+            "color": "#6B7280",
+            "deltaMinor": 26903500,
+            "isTotal": false,
+            "drilldownSlug": null,
+            "startMinor": 930395026,
+            "endMinor": 957298526,
+            "amountLabel": "+269k"
+          },
+          {
+            "kind": "category",
+            "id": "documents",
+            "label": "Documents",
+            "color": "#8B5CF6",
+            "deltaMinor": -162531800,
+            "isTotal": false,
+            "drilldownSlug": "documents",
+            "startMinor": 957298526,
+            "endMinor": 794766726,
+            "amountLabel": "-1.6m"
+          },
+          {
+            "kind": "category",
+            "id": "clothing",
+            "label": "Clothing",
+            "color": "#EC4899",
+            "deltaMinor": -101890000,
+            "isTotal": false,
+            "drilldownSlug": "clothing",
+            "startMinor": 794766726,
+            "endMinor": 692876726,
+            "amountLabel": "-1.0m"
+          },
+          {
+            "kind": "category",
+            "id": "groceries",
+            "label": "Groceries",
+            "color": "#00FF88",
+            "deltaMinor": -84041800,
+            "isTotal": false,
+            "drilldownSlug": "groceries",
+            "startMinor": 692876726,
+            "endMinor": 608834926,
+            "amountLabel": "-840k"
+          },
+          {
+            "kind": "category",
+            "id": "travel",
+            "label": "Travel",
+            "color": "#3B82F6",
+            "deltaMinor": -71300000,
+            "isTotal": false,
+            "drilldownSlug": "travel",
+            "startMinor": 608834926,
+            "endMinor": 537534926,
+            "amountLabel": "-713k"
+          },
+          {
+            "kind": "category",
+            "id": "eating-out",
+            "label": "Eating out",
+            "color": "#F59E0B",
+            "deltaMinor": -44130000,
+            "isTotal": false,
+            "drilldownSlug": "eating-out",
+            "startMinor": 537534926,
+            "endMinor": 493404926,
+            "amountLabel": "-441k"
+          },
+          {
+            "kind": "category",
+            "id": "ehsan",
+            "label": "Ehsan",
+            "color": "#D4AF37",
+            "deltaMinor": -37970900,
+            "isTotal": false,
+            "drilldownSlug": "ehsan",
+            "startMinor": 493404926,
+            "endMinor": 455434026,
+            "amountLabel": "-380k"
+          },
+          {
+            "kind": "other",
+            "id": "other",
+            "label": "Other (8)",
+            "color": "#4B5563",
+            "deltaMinor": -97830915,
+            "isTotal": false,
+            "drilldownSlug": null,
+            "startMinor": 455434026,
+            "endMinor": 357603111,
+            "amountLabel": "-978k"
+          },
+          {
+            "kind": "transfer-out",
+            "id": "transfer-out",
+            "label": "Moved out",
+            "color": "#6B7280",
+            "deltaMinor": -169800000,
+            "isTotal": false,
+            "drilldownSlug": null,
+            "startMinor": 357603111,
+            "endMinor": 187803111,
+            "amountLabel": "-1.7m"
+          },
+          {
+            "kind": "closing",
+            "id": "closing",
+            "label": "Closing",
+            "color": "#00FF88",
+            "deltaMinor": 0,
+            "isTotal": true,
+            "drilldownSlug": null,
+            "startMinor": 187803111,
+            "endMinor": 187803111,
+            "amountLabel": "1.9m"
+          }
+        ],
+        "minMinor": 0,
+        "maxMinor": 957298526,
+        "crossesZero": false,
+        "collapsedCount": 8,
+        "relative": false
+      },
+      "withoutOpening": {
+        "steps": [
+          {
+            "kind": "opening",
+            "id": "opening",
+            "label": "Start",
+            "color": "#6B7280",
+            "deltaMinor": 0,
+            "isTotal": true,
+            "drilldownSlug": null,
+            "startMinor": 0,
+            "endMinor": 0,
+            "amountLabel": "0"
+          },
+          {
+            "kind": "income",
+            "id": "income",
+            "label": "Income",
+            "color": "#00FF88",
+            "deltaMinor": 756000000,
+            "isTotal": false,
+            "drilldownSlug": null,
+            "startMinor": 0,
+            "endMinor": 756000000,
+            "amountLabel": "+7.6m"
+          },
+          {
+            "kind": "transfer-in",
+            "id": "transfer-in",
+            "label": "Moved in",
+            "color": "#6B7280",
+            "deltaMinor": 26903500,
+            "isTotal": false,
+            "drilldownSlug": null,
+            "startMinor": 756000000,
+            "endMinor": 782903500,
+            "amountLabel": "+269k"
+          },
+          {
+            "kind": "category",
+            "id": "documents",
+            "label": "Documents",
+            "color": "#8B5CF6",
+            "deltaMinor": -162531800,
+            "isTotal": false,
+            "drilldownSlug": "documents",
+            "startMinor": 782903500,
+            "endMinor": 620371700,
+            "amountLabel": "-1.6m"
+          },
+          {
+            "kind": "category",
+            "id": "clothing",
+            "label": "Clothing",
+            "color": "#EC4899",
+            "deltaMinor": -101890000,
+            "isTotal": false,
+            "drilldownSlug": "clothing",
+            "startMinor": 620371700,
+            "endMinor": 518481700,
+            "amountLabel": "-1.0m"
+          },
+          {
+            "kind": "category",
+            "id": "groceries",
+            "label": "Groceries",
+            "color": "#00FF88",
+            "deltaMinor": -84041800,
+            "isTotal": false,
+            "drilldownSlug": "groceries",
+            "startMinor": 518481700,
+            "endMinor": 434439900,
+            "amountLabel": "-840k"
+          },
+          {
+            "kind": "category",
+            "id": "travel",
+            "label": "Travel",
+            "color": "#3B82F6",
+            "deltaMinor": -71300000,
+            "isTotal": false,
+            "drilldownSlug": "travel",
+            "startMinor": 434439900,
+            "endMinor": 363139900,
+            "amountLabel": "-713k"
+          },
+          {
+            "kind": "category",
+            "id": "eating-out",
+            "label": "Eating out",
+            "color": "#F59E0B",
+            "deltaMinor": -44130000,
+            "isTotal": false,
+            "drilldownSlug": "eating-out",
+            "startMinor": 363139900,
+            "endMinor": 319009900,
+            "amountLabel": "-441k"
+          },
+          {
+            "kind": "category",
+            "id": "ehsan",
+            "label": "Ehsan",
+            "color": "#D4AF37",
+            "deltaMinor": -37970900,
+            "isTotal": false,
+            "drilldownSlug": "ehsan",
+            "startMinor": 319009900,
+            "endMinor": 281039000,
+            "amountLabel": "-380k"
+          },
+          {
+            "kind": "other",
+            "id": "other",
+            "label": "Other (8)",
+            "color": "#4B5563",
+            "deltaMinor": -97830915,
+            "isTotal": false,
+            "drilldownSlug": null,
+            "startMinor": 281039000,
+            "endMinor": 183208085,
+            "amountLabel": "-978k"
+          },
+          {
+            "kind": "transfer-out",
+            "id": "transfer-out",
+            "label": "Moved out",
+            "color": "#6B7280",
+            "deltaMinor": -169800000,
+            "isTotal": false,
+            "drilldownSlug": null,
+            "startMinor": 183208085,
+            "endMinor": 13408085,
+            "amountLabel": "-1.7m"
+          },
+          {
+            "kind": "closing",
+            "id": "closing",
+            "label": "Net",
+            "color": "#00FF88",
+            "deltaMinor": 0,
+            "isTotal": true,
+            "drilldownSlug": null,
+            "startMinor": 13408085,
+            "endMinor": 13408085,
+            "amountLabel": "134k"
+          }
+        ],
+        "minMinor": 0,
+        "maxMinor": 782903500,
+        "crossesZero": false,
+        "collapsedCount": 8,
+        "relative": true
+      }
+    }
+  },
+  "transactions": {
+    "stats": {
+      "shown": 153,
+      "total": 153,
+      "flagged": 27,
+      "uncategorised": 8,
+      "spendMinor": 944891553
+    },
+    "availableMonths": [
+      {
+        "key": "2026-08",
+        "label": "AUGUST 2026"
+      },
+      {
+        "key": "2026-07",
+        "label": "JULY 2026"
+      }
+    ],
+    "availableCategories": [
+      {
+        "slug": "clothing",
+        "name": "Clothing",
+        "color": "#EC4899"
+      },
+      {
+        "slug": "documents",
+        "name": "Documents",
+        "color": "#8B5CF6"
+      },
+      {
+        "slug": "eating-out",
+        "name": "Eating out",
+        "color": "#F59E0B"
+      },
+      {
+        "slug": "ehsan",
+        "name": "Ehsan",
+        "color": "#D4AF37"
+      },
+      {
+        "slug": "entertainment",
+        "name": "Entertainment",
+        "color": "#F59E0B"
+      },
+      {
+        "slug": "gifts-events",
+        "name": "Gifts + events",
+        "color": "#EC4899"
+      },
+      {
+        "slug": "groceries",
+        "name": "Groceries",
+        "color": "#00FF88"
+      },
+      {
+        "slug": "grooming",
+        "name": "Grooming",
+        "color": "#EC4899"
+      },
+      {
+        "slug": "health",
+        "name": "Health",
+        "color": "#EF4444"
+      },
+      {
+        "slug": "income",
+        "name": "Income",
+        "color": "#22C55E"
+      },
+      {
+        "slug": "investment",
+        "name": "Investment",
+        "color": "#22C55E"
+      },
+      {
+        "slug": "phone-internet",
+        "name": "Phone + net",
+        "color": "#3B82F6"
+      },
+      {
+        "slug": "transfer",
+        "name": "Transfer / debt",
+        "color": "#6B7280"
+      },
+      {
+        "slug": "transport",
+        "name": "Transport",
+        "color": "#06B6D4"
+      },
+      {
+        "slug": "travel",
+        "name": "Travel",
+        "color": "#3B82F6"
+      },
+      {
+        "slug": "utilities",
+        "name": "Utilities",
+        "color": "#6B7280"
+      },
+      {
+        "slug": "work-tools",
+        "name": "Work tools",
+        "color": "#00FF88"
+      }
+    ],
+    "groups": [
+      {
+        "key": "2026-08",
+        "label": "AUGUST 2026",
+        "spendMinor": 599695415,
+        "rowCount": 88,
+        "rows": [
+          "2026-08-01T01:27:00.000Z|1100000|-11k two bananas",
+          "2026-08-01T01:26:00.000Z|2929000|-29,290 ten eggs and 10l water",
+          "2026-08-01T01:25:00.000Z|2500000|-25k pol pola herbal tea from pharmacy for mom",
+          "2026-08-01T01:24:00.000Z|850000|-8.5k bus and metro",
+          "2026-08-01T01:23:00.000Z|2000000|-20k cash sausage",
+          "2026-08-01T01:22:00.000Z|1000000|-10k cash two banana",
+          "2026-08-01T01:21:00.000Z|700000|-7k cash for Samarkand bread",
+          "2026-08-01T01:20:00.000Z|300000|-3k cash for WC",
+          "2026-08-01T01:19:00.000Z|1500000|-15k cash water and qurt",
+          "2026-08-01T01:18:00.000Z|2050000|-20,500 to bus station",
+          "2026-08-01T01:17:00.000Z|800000|-8k to office",
+          "2026-08-01T01:16:00.000Z|1400000|-14k to father's grave",
+          "2026-08-01T01:15:00.000Z|200000|-2k cash gave to PersonI aka",
+          "2026-08-01T01:14:00.000Z|400000|-4k cash curtain thing",
+          "2026-08-01T01:13:00.000Z|500000|-5k cash water",
+          "2026-08-01T01:12:00.000Z|1500000|-15k cash football",
+          "2026-08-01T01:11:00.000Z|17600000|-176k bus ticket to Tashkent",
+          "2026-08-01T01:10:00.000Z|600000|-6k taxi",
+          "2026-08-01T01:09:00.000Z|11300000|+113,000 PersonA aka and PersonH opa sent back",
+          "2026-08-01T01:08:00.000Z|16610000|-166,100 lunch",
+          "2026-08-01T01:07:00.000Z|2500000|+25k PersonH opa gave",
+          "2026-08-01T01:06:00.000Z|7498400|-74,984 korzinka(3 g yogurt, banana, oreo)",
+          "2026-08-01T01:05:00.000Z|2000000|-20k for table tennis",
+          "2026-08-01T01:04:00.000Z|1600000|-16k g yogurt",
+          "2026-08-01T01:03:00.000Z|1200000|-12k two water",
+          "2026-08-01T01:02:00.000Z|1150000|-11,500 to office",
+          "2026-08-01T01:01:00.000Z|500000|-5k cash ehsan",
+          "2026-08-01T01:00:00.000Z|1150000|-11,500 taxi to Masjid for Juma",
+          "2026-08-01T00:59:00.000Z|147531800|-1,475,318 for DXM kadastr passport doc payment",
+          "2026-08-01T00:58:00.000Z|150000000|+1,500,000 avans salary",
+          "2026-08-01T00:57:00.000Z|500000|-5k taxi to aunt home",
+          "2026-08-01T00:56:00.000Z|6715874|-67,158.74 Anthropic API",
+          "2026-08-01T00:55:00.000Z|6000000|-60k cash dinner at feedup",
+          "2026-08-01T00:54:00.000Z|3600000|-36k cash lunch plov",
+          "2026-08-01T00:53:00.000Z|20000000|+200k cash",
+          "2026-08-01T00:52:00.000Z|25000000|-250k sent to PersonE",
+          "2026-08-01T00:51:00.000Z|3505700|-35,057 korzinka(g yogurt n banana)",
+          "2026-08-01T00:50:00.000Z|12320000|-123,200 dinner two",
+          "2026-08-01T00:49:00.000Z|913100|-9131 phone payment",
+          "2026-08-01T00:48:00.000Z|900000|-9k chortoq",
+          "2026-08-01T00:47:00.000Z|200000|-2k bus",
+          "2026-08-01T00:46:00.000Z|950000|-9,500 taxi",
+          "2026-08-01T00:45:00.000Z|30300000|-303k (3k for withdrawal comission) for ehsan",
+          "2026-08-01T00:44:00.000Z|5770900|-57,709 banana and yogurt for ehsan",
+          "2026-08-01T00:43:00.000Z|5600000|-56k dinner",
+          "2026-08-01T00:42:00.000Z|202000|-2020 qurt",
+          "2026-08-01T00:41:00.000Z|120000000|+1,200,000 avans salary from IA",
+          "2026-08-01T00:40:00.000Z|600000|-6k water",
+          "2026-08-01T00:39:00.000Z|1200000|-12k taxi to aunt home",
+          "2026-08-01T00:38:00.000Z|15000000|-150k payment for docs",
+          "2026-08-01T00:37:00.000Z|850000|-8,500 taxi to DXM",
+          "2026-08-01T00:36:00.000Z|2210000|-22,100 grocery (g yogurt and banana)",
+          "2026-08-01T00:35:00.000Z|3950000|-39,500 for entertainment",
+          "2026-08-01T00:34:00.000Z|7100000|-71k for me and mom's phone plan",
+          "2026-08-01T00:33:00.000Z|1000000|-10k debt to PersonB",
+          "2026-08-01T00:32:00.000Z|2100000|-21k yandex taxi to bus station",
+          "2026-08-01T00:31:00.000Z|1080000|-10,800 for bus and metro",
+          "2026-08-01T00:30:00.000Z|808000|-8080 for couple water",
+          "2026-08-01T00:29:00.000Z|21000000|-210k small sized suitcase(luggage)",
+          "2026-08-01T00:28:00.000Z|6713900|-67,139 grocery",
+          "2026-08-01T00:27:00.000Z|25000000|-250k got nice crosses",
+          "2026-08-01T00:26:00.000Z|1750000|-17,500 to xl cross store",
+          "2026-08-01T00:25:00.000Z|17600000|-176k for bus ticket to Termez",
+          "2026-08-01T00:24:00.000Z|75140000|-751,400 for outfit shopping",
+          "2026-08-01T00:23:00.000Z|4045600|-40,456 grocery(g yogurt, sirok, grapes)",
+          "2026-08-01T00:22:00.000Z|1700000|-17,000 bus and metro",
+          "2026-08-01T00:21:00.000Z|2560000|-25,600 for medicine(duklofenak, minovazin and spirt)",
+          "2026-08-01T00:20:00.000Z|3500|+35 got cash from PersonD aka",
+          "2026-08-01T00:19:00.000Z|3500000|-35k sent to PersonD aka",
+          "2026-08-01T00:18:00.000Z|115500|-1155 for taxi (with wb wmelons)",
+          "2026-08-01T00:17:00.000Z|800000|-8k two bread",
+          "2026-08-01T00:16:00.000Z|10000000|-100k investment in IMANUM app",
+          "2026-08-01T00:15:00.000Z|1100000|-11k two bread",
+          "2026-08-01T00:14:00.000Z|1350000|-13,500 for taxi to home",
+          "2026-08-01T00:13:00.000Z|36819200|-368,192 for big grocery",
+          "2026-08-01T00:12:00.000Z|10000000|-100k for wedding IA",
+          "2026-08-01T00:11:00.000Z|6310000|-63,100 grocery (melon, g yogurt, sirok-2)",
+          "2026-08-01T00:10:00.000Z|18500000|-185k for wifi provider",
+          "2026-08-01T00:09:00.000Z|13526441|-135,264.41 for Anthropic API $10(1.20 tax)",
+          "2026-08-01T00:08:00.000Z|1020000|-10,200 bus and metro",
+          "2026-08-01T00:07:00.000Z|15100000|+151k PersonC sister sent back",
+          "2026-08-01T00:06:00.000Z|15100000|-151k paid for PersonC sister's ticket",
+          "2026-08-01T00:05:00.000Z|6200000|-62k debt to PersonJ book gift for PersonK",
+          "2026-08-01T00:04:00.000Z|119100000|1,191,000 transferred to PersonD aka and got 100$ cash",
+          "2026-08-01T00:03:00.000Z|15000000|-150k debt PersonA aka",
+          "2026-08-01T00:02:00.000Z|462500000|4,625,000 salary (July)",
+          "2026-08-01T00:01:00.000Z|1000000|+10k from sister for commute",
+          "2026-08-01T00:00:00.000Z|500000|+5k got debt from PersonG"
+        ]
+      },
+      {
+        "key": "2026-07",
+        "label": "JULY 2026",
+        "spendMinor": 345196138,
+        "rowCount": 65,
+        "rows": [
+          "2026-07-01T01:04:00.000Z|1190000|11,900 for bus and metro",
+          "2026-07-01T01:03:00.000Z|350520|+3,505.2",
+          "2026-07-01T01:02:00.000Z|18339021|183,390.21 for Upwork 100 connects",
+          "2026-07-01T01:01:00.000Z|1000000|+10k got debt PersonB",
+          "2026-07-01T01:00:00.000Z|440644|+4406,44 cashback",
+          "2026-07-01T00:59:00.000Z|15000000|+150k got debt PersonA aka",
+          "2026-07-01T00:58:00.000Z|1020000|10,200 bus+metro",
+          "2026-07-01T00:57:00.000Z|461700|4617 banana",
+          "2026-07-01T00:56:00.000Z|369400|3694 banana",
+          "2026-07-01T00:55:00.000Z|490000|4900 banana",
+          "2026-07-01T00:54:00.000Z|3469100|34,691 taxi to home",
+          "2026-07-01T00:53:00.000Z|25900000|259k pizza apex",
+          "2026-07-01T00:52:00.000Z|3200000|32k tea and ice-cream from wedrink",
+          "2026-07-01T00:51:00.000Z|961900|9619 taxi to seul moon",
+          "2026-07-01T00:50:00.000Z|4700000|47k chortoq, water, semechka, qurt",
+          "2026-07-01T00:49:00.000Z|10000000|100k ehsan",
+          "2026-07-01T00:48:00.000Z|850000|8.5k bus+metro",
+          "2026-07-01T00:47:00.000Z|2486300|24,863 banana sirok and tvorog",
+          "2026-07-01T00:46:00.000Z|4200000|42k(with 105 sum CF) sent to cwker, got 45 cash and 5 went for their delivery and 40k to ehsan",
+          "2026-07-01T00:45:00.000Z|485000000|4,850,000 transferred to mom for 400$",
+          "2026-07-01T00:44:00.000Z|304300|3043 banana",
+          "2026-07-01T00:43:00.000Z|1400000|14k taxi from avtostation",
+          "2026-07-01T00:42:00.000Z|4559500|45,595 (tvorog, banana, g yogurt, sirok)",
+          "2026-07-01T00:41:00.000Z|25000000|250k barber for good hair cut with scissors",
+          "2026-07-01T00:40:00.000Z|2500000|25k ehsan to masjid communal",
+          "2026-07-01T00:39:00.000Z|680000|6,800 banana",
+          "2026-07-01T00:38:00.000Z|1020000|10,200 bus + metro",
+          "2026-07-01T00:37:00.000Z|10000000|100k exchanged to cash with coworker",
+          "2026-07-01T00:36:00.000Z|4329500|43,295 grocery( tvorog, banana, dates, sirok)",
+          "2026-07-01T00:35:00.000Z|48000000|480k 3 tickets",
+          "2026-07-01T00:34:00.000Z|4641100|46,411 grocery( tvorog, banana, grapes, sirok)",
+          "2026-07-01T00:33:00.000Z|242000000|+ 2,420,000 balance of salary",
+          "2026-07-01T00:32:00.000Z|20000000|200k to PersonG and he gave cash",
+          "2026-07-01T00:31:00.000Z|1020000|10,200 metro + bus",
+          "2026-07-01T00:30:00.000Z|7818200|78,182 for me and mom's p#",
+          "2026-07-01T00:29:00.000Z|5050000|50,500 (30 to PersonG and 20 to taxi)",
+          "2026-07-01T00:28:00.000Z|14960000|149,600 (osh+ somsa from Nomdor with PersonG)",
+          "2026-07-01T00:27:00.000Z|3011567|30,115.67 (two taxi)",
+          "2026-07-01T00:26:00.000Z|1862400|18,624 (g yogurt and bananas)",
+          "2026-07-01T00:25:00.000Z|20000000|200k sent to PersonF, he sent back",
+          "2026-07-01T00:24:00.000Z|1190000|11,900 bus+ metro",
+          "2026-07-01T00:23:00.000Z|3500000|35k to sister p#",
+          "2026-07-01T00:22:00.000Z|5000000|50k osh",
+          "2026-07-01T00:21:00.000Z|3201500|32,015 g yogurt, grapes and banana",
+          "2026-07-01T00:20:00.000Z|5000000|50k osh",
+          "2026-07-01T00:19:00.000Z|1505600|15,056 banana and sirok",
+          "2026-07-01T00:18:00.000Z|900000|9k banana",
+          "2026-07-01T00:17:00.000Z|6000000|60k plov (nomdor)",
+          "2026-07-01T00:16:00.000Z|4194850|41,948.5 grocery ( chicken, watermelon, g yogurt, ice cream)",
+          "2026-07-01T00:15:00.000Z|2500000|25k entertainment",
+          "2026-07-01T00:14:00.000Z|850000|8,500 commute(bus, metro)",
+          "2026-07-01T00:13:00.000Z|5000000|50k for entertainment",
+          "2026-07-01T00:12:00.000Z|5210000|52,100 grocery(sprite, bread, choco)",
+          "2026-07-01T00:11:00.000Z|10000000|100k for the IA wedding",
+          "2026-07-01T00:10:00.000Z|6720000|67,200 grocery(eggs, g yogurt, melon)",
+          "2026-07-01T00:09:00.000Z|6204000|62,040 argan oil",
+          "2026-07-01T00:08:00.000Z|28050000|280,500 Gano tea for mom",
+          "2026-07-01T00:07:00.000Z|3850000|13,713(potato and 2 bread) + 38,500(taxi) ehson",
+          "2026-07-01T00:06:00.000Z|1371300|13,713(potato and 2 bread) + 38,500(taxi) ehson",
+          "2026-07-01T00:05:00.000Z|8754900|87,549 korzinka grocery(ch-breast, gr yogurt, cucu, tomato, melon, red bolgarski)",
+          "2026-07-01T00:04:00.000Z|3300000|33k grocery(banana, eggs and water)",
+          "2026-07-01T00:03:00.000Z|4500000|45k for trousers",
+          "2026-07-01T00:02:00.000Z|20500000|205k mom's expenses(pijama, perfume)",
+          "2026-07-01T00:01:00.000Z|7500000|75 k JK + comunnal( h water and garbage)",
+          "2026-07-01T00:00:00.000Z|800000|8k banana"
+        ]
+      }
+    ],
+    "drilldown": {
+      "2026-07/groceries": {
+        "sliceMinor": 60842350,
+        "rowCount": 21,
+        "rows": [
+          "2026-07-01T00:57:00.000Z|461700|4617 banana",
+          "2026-07-01T00:56:00.000Z|369400|3694 banana",
+          "2026-07-01T00:55:00.000Z|490000|4900 banana",
+          "2026-07-01T00:50:00.000Z|4700000|47k chortoq, water, semechka, qurt",
+          "2026-07-01T00:47:00.000Z|2486300|24,863 banana sirok and tvorog",
+          "2026-07-01T00:44:00.000Z|304300|3043 banana",
+          "2026-07-01T00:42:00.000Z|4559500|45,595 (tvorog, banana, g yogurt, sirok)",
+          "2026-07-01T00:39:00.000Z|680000|6,800 banana",
+          "2026-07-01T00:36:00.000Z|4329500|43,295 grocery( tvorog, banana, dates, sirok)",
+          "2026-07-01T00:34:00.000Z|4641100|46,411 grocery( tvorog, banana, grapes, sirok)",
+          "2026-07-01T00:26:00.000Z|1862400|18,624 (g yogurt and bananas)",
+          "2026-07-01T00:21:00.000Z|3201500|32,015 g yogurt, grapes and banana",
+          "2026-07-01T00:19:00.000Z|1505600|15,056 banana and sirok",
+          "2026-07-01T00:18:00.000Z|900000|9k banana",
+          "2026-07-01T00:16:00.000Z|4194850|41,948.5 grocery ( chicken, watermelon, g yogurt, ice cream)",
+          "2026-07-01T00:12:00.000Z|5210000|52,100 grocery(sprite, bread, choco)",
+          "2026-07-01T00:10:00.000Z|6720000|67,200 grocery(eggs, g yogurt, melon)",
+          "2026-07-01T00:06:00.000Z|1371300|13,713(potato and 2 bread) + 38,500(taxi) ehson",
+          "2026-07-01T00:05:00.000Z|8754900|87,549 korzinka grocery(ch-breast, gr yogurt, cucu, tomato, melon, red bolgarski)",
+          "2026-07-01T00:04:00.000Z|3300000|33k grocery(banana, eggs and water)",
+          "2026-07-01T00:00:00.000Z|800000|8k banana"
+        ]
+      },
+      "2026-07/eating-out": {
+        "sliceMinor": 60060000,
+        "rowCount": 6,
+        "rows": [
+          "2026-07-01T00:53:00.000Z|25900000|259k pizza apex",
+          "2026-07-01T00:52:00.000Z|3200000|32k tea and ice-cream from wedrink",
+          "2026-07-01T00:28:00.000Z|14960000|149,600 (osh+ somsa from Nomdor with PersonG)",
+          "2026-07-01T00:22:00.000Z|5000000|50k osh",
+          "2026-07-01T00:20:00.000Z|5000000|50k osh",
+          "2026-07-01T00:17:00.000Z|6000000|60k plov (nomdor)"
+        ]
+      },
+      "2026-07/travel": {
+        "sliceMinor": 48000000,
+        "rowCount": 1,
+        "rows": [
+          "2026-07-01T00:35:00.000Z|48000000|480k 3 tickets"
+        ]
+      },
+      "2026-07/grooming": {
+        "sliceMinor": 31204000,
+        "rowCount": 2,
+        "rows": [
+          "2026-07-01T00:41:00.000Z|25000000|250k barber for good hair cut with scissors",
+          "2026-07-01T00:09:00.000Z|6204000|62,040 argan oil"
+        ]
+      },
+      "2026-07/health": {
+        "sliceMinor": 28050000,
+        "rowCount": 1,
+        "rows": [
+          "2026-07-01T00:08:00.000Z|28050000|280,500 Gano tea for mom"
+        ]
+      },
+      "2026-07/clothing": {
+        "sliceMinor": 25000000,
+        "rowCount": 2,
+        "rows": [
+          "2026-07-01T00:03:00.000Z|4500000|45k for trousers",
+          "2026-07-01T00:02:00.000Z|20500000|205k mom's expenses(pijama, perfume)"
+        ]
+      },
+      "2026-07/transport": {
+        "sliceMinor": 21032567,
+        "rowCount": 12,
+        "rows": [
+          "2026-07-01T01:04:00.000Z|1190000|11,900 for bus and metro",
+          "2026-07-01T00:58:00.000Z|1020000|10,200 bus+metro",
+          "2026-07-01T00:54:00.000Z|3469100|34,691 taxi to home",
+          "2026-07-01T00:51:00.000Z|961900|9619 taxi to seul moon",
+          "2026-07-01T00:48:00.000Z|850000|8.5k bus+metro",
+          "2026-07-01T00:43:00.000Z|1400000|14k taxi from avtostation",
+          "2026-07-01T00:38:00.000Z|1020000|10,200 bus + metro",
+          "2026-07-01T00:31:00.000Z|1020000|10,200 metro + bus",
+          "2026-07-01T00:29:00.000Z|5050000|50,500 (30 to PersonG and 20 to taxi)",
+          "2026-07-01T00:27:00.000Z|3011567|30,115.67 (two taxi)",
+          "2026-07-01T00:24:00.000Z|1190000|11,900 bus+ metro",
+          "2026-07-01T00:14:00.000Z|850000|8,500 commute(bus, metro)"
+        ]
+      },
+      "2026-07/work-tools": {
+        "sliceMinor": 18339021,
+        "rowCount": 1,
+        "rows": [
+          "2026-07-01T01:02:00.000Z|18339021|183,390.21 for Upwork 100 connects"
+        ]
+      },
+      "2026-07/ehsan": {
+        "sliceMinor": 16350000,
+        "rowCount": 3,
+        "rows": [
+          "2026-07-01T00:49:00.000Z|10000000|100k ehsan",
+          "2026-07-01T00:40:00.000Z|2500000|25k ehsan to masjid communal",
+          "2026-07-01T00:07:00.000Z|3850000|13,713(potato and 2 bread) + 38,500(taxi) ehson"
+        ]
+      },
+      "2026-07/phone-internet": {
+        "sliceMinor": 11318200,
+        "rowCount": 2,
+        "rows": [
+          "2026-07-01T00:30:00.000Z|7818200|78,182 for me and mom's p#",
+          "2026-07-01T00:23:00.000Z|3500000|35k to sister p#"
+        ]
+      },
+      "2026-07/gifts-events": {
+        "sliceMinor": 10000000,
+        "rowCount": 1,
+        "rows": [
+          "2026-07-01T00:11:00.000Z|10000000|100k for the IA wedding"
+        ]
+      },
+      "2026-07/utilities": {
+        "sliceMinor": 7500000,
+        "rowCount": 1,
+        "rows": [
+          "2026-07-01T00:01:00.000Z|7500000|75 k JK + comunnal( h water and garbage)"
+        ]
+      },
+      "2026-07/entertainment": {
+        "sliceMinor": 7500000,
+        "rowCount": 2,
+        "rows": [
+          "2026-07-01T00:15:00.000Z|2500000|25k entertainment",
+          "2026-07-01T00:13:00.000Z|5000000|50k for entertainment"
+        ]
+      },
+      "2026-08/documents": {
+        "sliceMinor": 162531800,
+        "rowCount": 2,
+        "rows": [
+          "2026-08-01T00:59:00.000Z|147531800|-1,475,318 for DXM kadastr passport doc payment",
+          "2026-08-01T00:38:00.000Z|15000000|-150k payment for docs"
+        ]
+      },
+      "2026-08/clothing": {
+        "sliceMinor": 101890000,
+        "rowCount": 3,
+        "rows": [
+          "2026-08-01T00:27:00.000Z|25000000|-250k got nice crosses",
+          "2026-08-01T00:26:00.000Z|1750000|-17,500 to xl cross store",
+          "2026-08-01T00:24:00.000Z|75140000|-751,400 for outfit shopping"
+        ]
+      },
+      "2026-08/groceries": {
+        "sliceMinor": 84041800,
+        "rowCount": 22,
+        "rows": [
+          "2026-08-01T01:27:00.000Z|1100000|-11k two bananas",
+          "2026-08-01T01:26:00.000Z|2929000|-29,290 ten eggs and 10l water",
+          "2026-08-01T01:23:00.000Z|2000000|-20k cash sausage",
+          "2026-08-01T01:22:00.000Z|1000000|-10k cash two banana",
+          "2026-08-01T01:21:00.000Z|700000|-7k cash for Samarkand bread",
+          "2026-08-01T01:19:00.000Z|1500000|-15k cash water and qurt",
+          "2026-08-01T01:13:00.000Z|500000|-5k cash water",
+          "2026-08-01T01:06:00.000Z|7498400|-74,984 korzinka(3 g yogurt, banana, oreo)",
+          "2026-08-01T01:04:00.000Z|1600000|-16k g yogurt",
+          "2026-08-01T01:03:00.000Z|1200000|-12k two water",
+          "2026-08-01T00:51:00.000Z|3505700|-35,057 korzinka(g yogurt n banana)",
+          "2026-08-01T00:48:00.000Z|900000|-9k chortoq",
+          "2026-08-01T00:42:00.000Z|202000|-2020 qurt",
+          "2026-08-01T00:40:00.000Z|600000|-6k water",
+          "2026-08-01T00:36:00.000Z|2210000|-22,100 grocery (g yogurt and banana)",
+          "2026-08-01T00:30:00.000Z|808000|-8080 for couple water",
+          "2026-08-01T00:28:00.000Z|6713900|-67,139 grocery",
+          "2026-08-01T00:23:00.000Z|4045600|-40,456 grocery(g yogurt, sirok, grapes)",
+          "2026-08-01T00:17:00.000Z|800000|-8k two bread",
+          "2026-08-01T00:15:00.000Z|1100000|-11k two bread",
+          "2026-08-01T00:13:00.000Z|36819200|-368,192 for big grocery",
+          "2026-08-01T00:11:00.000Z|6310000|-63,100 grocery (melon, g yogurt, sirok-2)"
+        ]
+      },
+      "2026-08/travel": {
+        "sliceMinor": 71300000,
+        "rowCount": 4,
+        "rows": [
+          "2026-08-01T01:11:00.000Z|17600000|-176k bus ticket to Tashkent",
+          "2026-08-01T00:29:00.000Z|21000000|-210k small sized suitcase(luggage)",
+          "2026-08-01T00:25:00.000Z|17600000|-176k for bus ticket to Termez",
+          "2026-08-01T00:06:00.000Z|15100000|-151k paid for PersonC sister's ticket"
+        ]
+      },
+      "2026-08/eating-out": {
+        "sliceMinor": 44130000,
+        "rowCount": 5,
+        "rows": [
+          "2026-08-01T01:08:00.000Z|16610000|-166,100 lunch",
+          "2026-08-01T00:55:00.000Z|6000000|-60k cash dinner at feedup",
+          "2026-08-01T00:54:00.000Z|3600000|-36k cash lunch plov",
+          "2026-08-01T00:50:00.000Z|12320000|-123,200 dinner two",
+          "2026-08-01T00:43:00.000Z|5600000|-56k dinner"
+        ]
+      },
+      "2026-08/ehsan": {
+        "sliceMinor": 37970900,
+        "rowCount": 4,
+        "rows": [
+          "2026-08-01T01:16:00.000Z|1400000|-14k to father's grave",
+          "2026-08-01T01:01:00.000Z|500000|-5k cash ehsan",
+          "2026-08-01T00:45:00.000Z|30300000|-303k (3k for withdrawal comission) for ehsan",
+          "2026-08-01T00:44:00.000Z|5770900|-57,709 banana and yogurt for ehsan"
+        ]
+      },
+      "2026-08/phone-internet": {
+        "sliceMinor": 26513100,
+        "rowCount": 3,
+        "rows": [
+          "2026-08-01T00:49:00.000Z|913100|-9131 phone payment",
+          "2026-08-01T00:34:00.000Z|7100000|-71k for me and mom's phone plan",
+          "2026-08-01T00:10:00.000Z|18500000|-185k for wifi provider"
+        ]
+      },
+      "2026-08/work-tools": {
+        "sliceMinor": 20242315,
+        "rowCount": 2,
+        "rows": [
+          "2026-08-01T00:56:00.000Z|6715874|-67,158.74 Anthropic API",
+          "2026-08-01T00:09:00.000Z|13526441|-135,264.41 for Anthropic API $10(1.20 tax)"
+        ]
+      },
+      "2026-08/transport": {
+        "sliceMinor": 15715500,
+        "rowCount": 15,
+        "rows": [
+          "2026-08-01T01:24:00.000Z|850000|-8.5k bus and metro",
+          "2026-08-01T01:18:00.000Z|2050000|-20,500 to bus station",
+          "2026-08-01T01:10:00.000Z|600000|-6k taxi",
+          "2026-08-01T01:00:00.000Z|1150000|-11,500 taxi to Masjid for Juma",
+          "2026-08-01T00:57:00.000Z|500000|-5k taxi to aunt home",
+          "2026-08-01T00:47:00.000Z|200000|-2k bus",
+          "2026-08-01T00:46:00.000Z|950000|-9,500 taxi",
+          "2026-08-01T00:39:00.000Z|1200000|-12k taxi to aunt home",
+          "2026-08-01T00:37:00.000Z|850000|-8,500 taxi to DXM",
+          "2026-08-01T00:32:00.000Z|2100000|-21k yandex taxi to bus station",
+          "2026-08-01T00:31:00.000Z|1080000|-10,800 for bus and metro",
+          "2026-08-01T00:22:00.000Z|1700000|-17,000 bus and metro",
+          "2026-08-01T00:18:00.000Z|115500|-1155 for taxi (with wb wmelons)",
+          "2026-08-01T00:14:00.000Z|1350000|-13,500 for taxi to home",
+          "2026-08-01T00:08:00.000Z|1020000|-10,200 bus and metro"
+        ]
+      },
+      "2026-08/gifts-events": {
+        "sliceMinor": 10000000,
+        "rowCount": 1,
+        "rows": [
+          "2026-08-01T00:12:00.000Z|10000000|-100k for wedding IA"
+        ]
+      },
+      "2026-08/investment": {
+        "sliceMinor": 10000000,
+        "rowCount": 1,
+        "rows": [
+          "2026-08-01T00:16:00.000Z|10000000|-100k investment in IMANUM app"
+        ]
+      },
+      "2026-08/entertainment": {
+        "sliceMinor": 7450000,
+        "rowCount": 3,
+        "rows": [
+          "2026-08-01T01:12:00.000Z|1500000|-15k cash football",
+          "2026-08-01T01:05:00.000Z|2000000|-20k for table tennis",
+          "2026-08-01T00:35:00.000Z|3950000|-39,500 for entertainment"
+        ]
+      },
+      "2026-08/health": {
+        "sliceMinor": 5060000,
+        "rowCount": 2,
+        "rows": [
+          "2026-08-01T01:25:00.000Z|2500000|-25k pol pola herbal tea from pharmacy for mom",
+          "2026-08-01T00:21:00.000Z|2560000|-25,600 for medicine(duklofenak, minovazin and spirt)"
+        ]
+      },
+      "2026-08/uncategorised": {
+        "sliceMinor": 2850000,
+        "rowCount": 5,
+        "rows": [
+          "2026-08-01T01:20:00.000Z|300000|-3k cash for WC",
+          "2026-08-01T01:17:00.000Z|800000|-8k to office",
+          "2026-08-01T01:15:00.000Z|200000|-2k cash gave to PersonI aka",
+          "2026-08-01T01:14:00.000Z|400000|-4k cash curtain thing",
+          "2026-08-01T01:02:00.000Z|1150000|-11,500 to office"
+        ]
+      }
+    },
+    "occurredDisplay": [
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Jul 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      },
+      {
+        "text": "Aug 2026",
+        "approximate": true
+      }
+    ]
+  },
+  "positions": {
+    "onDays": {
+      "2026-06-01": {
+        "accounts": [
+          {
+            "name": "Main",
+            "currency": "UZS",
+            "owner": "me",
+            "minor": null,
+            "uncounted": true,
+            "movedMinor": 0,
+            "movementCount": 0,
+            "daysSinceCount": null
+          },
+          {
+            "name": "Mom — cash",
+            "currency": "UZS",
+            "owner": "mom",
+            "minor": null,
+            "uncounted": true,
+            "movedMinor": 0,
+            "movementCount": 0,
+            "daysSinceCount": null
+          },
+          {
+            "name": "Mom — dollars",
+            "currency": "USD",
+            "owner": "mom",
+            "minor": null,
+            "uncounted": true,
+            "movedMinor": 0,
+            "movementCount": 0,
+            "daysSinceCount": null
+          },
+          {
+            "name": "Sister — cash",
+            "currency": "UZS",
+            "owner": "sister",
+            "minor": null,
+            "uncounted": true,
+            "movedMinor": 0,
+            "movementCount": 0,
+            "daysSinceCount": null
+          }
+        ],
+        "household": {
+          "byCurrency": [
+            {
+              "currency": "UZS",
+              "minor": 0,
+              "countedAccounts": 0,
+              "uncountedAccounts": 3
+            },
+            {
+              "currency": "USD",
+              "minor": 0,
+              "countedAccounts": 0,
+              "uncountedAccounts": 1
+            }
+          ],
+          "byOwner": [
+            {
+              "owner": "me",
+              "byCurrency": [
+                {
+                  "currency": "UZS",
+                  "minor": 0,
+                  "countedAccounts": 0,
+                  "uncountedAccounts": 1
+                }
+              ]
+            },
+            {
+              "owner": "mom",
+              "byCurrency": [
+                {
+                  "currency": "UZS",
+                  "minor": 0,
+                  "countedAccounts": 0,
+                  "uncountedAccounts": 1
+                },
+                {
+                  "currency": "USD",
+                  "minor": 0,
+                  "countedAccounts": 0,
+                  "uncountedAccounts": 1
+                }
+              ]
+            },
+            {
+              "owner": "sister",
+              "byCurrency": [
+                {
+                  "currency": "UZS",
+                  "minor": 0,
+                  "countedAccounts": 0,
+                  "uncountedAccounts": 1
+                }
+              ]
+            }
+          ],
+          "totalUzsMinor": 0,
+          "convertedUzsMinor": 0,
+          "needsRate": false,
+          "uncounted": [
+            "Main",
+            "Mom — cash",
+            "Mom — dollars",
+            "Sister — cash"
+          ],
+          "rate": {
+            "uzsPerUsdMinor": 1265000,
+            "setAt": "2026-08-01"
+          }
+        },
+        "householdWithoutRate": {
+          "totalUzsMinor": 0,
+          "needsRate": false
+        }
+      },
+      "2026-07-31": {
+        "accounts": [
+          {
+            "name": "Main",
+            "currency": "UZS",
+            "owner": "me",
+            "minor": 174395026,
+            "uncounted": false,
+            "movedMinor": -625604974,
+            "movementCount": 65,
+            "daysSinceCount": 31
+          },
+          {
+            "name": "Mom — cash",
+            "currency": "UZS",
+            "owner": "mom",
+            "minor": 120000000,
+            "uncounted": false,
+            "movedMinor": 0,
+            "movementCount": 0,
+            "daysSinceCount": 31
+          },
+          {
+            "name": "Mom — dollars",
+            "currency": "USD",
+            "owner": "mom",
+            "minor": 40000,
+            "uncounted": false,
+            "movedMinor": 0,
+            "movementCount": 0,
+            "daysSinceCount": 31
+          },
+          {
+            "name": "Sister — cash",
+            "currency": "UZS",
+            "owner": "sister",
+            "minor": 0,
+            "uncounted": false,
+            "movedMinor": 0,
+            "movementCount": 0,
+            "daysSinceCount": 31
+          }
+        ],
+        "household": {
+          "byCurrency": [
+            {
+              "currency": "UZS",
+              "minor": 294395026,
+              "countedAccounts": 3,
+              "uncountedAccounts": 0
+            },
+            {
+              "currency": "USD",
+              "minor": 40000,
+              "countedAccounts": 1,
+              "uncountedAccounts": 0
+            }
+          ],
+          "byOwner": [
+            {
+              "owner": "me",
+              "byCurrency": [
+                {
+                  "currency": "UZS",
+                  "minor": 174395026,
+                  "countedAccounts": 1,
+                  "uncountedAccounts": 0
+                }
+              ]
+            },
+            {
+              "owner": "mom",
+              "byCurrency": [
+                {
+                  "currency": "UZS",
+                  "minor": 120000000,
+                  "countedAccounts": 1,
+                  "uncountedAccounts": 0
+                },
+                {
+                  "currency": "USD",
+                  "minor": 40000,
+                  "countedAccounts": 1,
+                  "uncountedAccounts": 0
+                }
+              ]
+            },
+            {
+              "owner": "sister",
+              "byCurrency": [
+                {
+                  "currency": "UZS",
+                  "minor": 0,
+                  "countedAccounts": 1,
+                  "uncountedAccounts": 0
+                }
+              ]
+            }
+          ],
+          "totalUzsMinor": 800395026,
+          "convertedUzsMinor": 506000000,
+          "needsRate": false,
+          "uncounted": [],
+          "rate": {
+            "uzsPerUsdMinor": 1265000,
+            "setAt": "2026-08-01"
+          }
+        },
+        "householdWithoutRate": {
+          "totalUzsMinor": null,
+          "needsRate": true
+        }
+      },
+      "2026-08-31": {
+        "accounts": [
+          {
+            "name": "Main",
+            "currency": "UZS",
+            "owner": "me",
+            "minor": 187803111,
+            "uncounted": false,
+            "movedMinor": -612196889,
+            "movementCount": 153,
+            "daysSinceCount": 62
+          },
+          {
+            "name": "Mom — cash",
+            "currency": "UZS",
+            "owner": "mom",
+            "minor": 120000000,
+            "uncounted": false,
+            "movedMinor": 0,
+            "movementCount": 0,
+            "daysSinceCount": 62
+          },
+          {
+            "name": "Mom — dollars",
+            "currency": "USD",
+            "owner": "mom",
+            "minor": 40000,
+            "uncounted": false,
+            "movedMinor": 0,
+            "movementCount": 0,
+            "daysSinceCount": 62
+          },
+          {
+            "name": "Sister — cash",
+            "currency": "UZS",
+            "owner": "sister",
+            "minor": 0,
+            "uncounted": false,
+            "movedMinor": 0,
+            "movementCount": 0,
+            "daysSinceCount": 62
+          }
+        ],
+        "household": {
+          "byCurrency": [
+            {
+              "currency": "UZS",
+              "minor": 307803111,
+              "countedAccounts": 3,
+              "uncountedAccounts": 0
+            },
+            {
+              "currency": "USD",
+              "minor": 40000,
+              "countedAccounts": 1,
+              "uncountedAccounts": 0
+            }
+          ],
+          "byOwner": [
+            {
+              "owner": "me",
+              "byCurrency": [
+                {
+                  "currency": "UZS",
+                  "minor": 187803111,
+                  "countedAccounts": 1,
+                  "uncountedAccounts": 0
+                }
+              ]
+            },
+            {
+              "owner": "mom",
+              "byCurrency": [
+                {
+                  "currency": "UZS",
+                  "minor": 120000000,
+                  "countedAccounts": 1,
+                  "uncountedAccounts": 0
+                },
+                {
+                  "currency": "USD",
+                  "minor": 40000,
+                  "countedAccounts": 1,
+                  "uncountedAccounts": 0
+                }
+              ]
+            },
+            {
+              "owner": "sister",
+              "byCurrency": [
+                {
+                  "currency": "UZS",
+                  "minor": 0,
+                  "countedAccounts": 1,
+                  "uncountedAccounts": 0
+                }
+              ]
+            }
+          ],
+          "totalUzsMinor": 813803111,
+          "convertedUzsMinor": 506000000,
+          "needsRate": false,
+          "uncounted": [],
+          "rate": {
+            "uzsPerUsdMinor": 1265000,
+            "setAt": "2026-08-01"
+          }
+        },
+        "householdWithoutRate": {
+          "totalUzsMinor": null,
+          "needsRate": true
+        }
+      }
+    },
+    "openingFromCheckpoints": {
+      "withRate": {
+        "amountMinor": 1426000000,
+        "asOf": "2026-06-30",
+        "skippedAccounts": 0
+      },
+      "withoutRate": {
+        "amountMinor": 920000000,
+        "asOf": "2026-06-30",
+        "skippedAccounts": 1
+      },
+      "stage1Figure": {
+        "amountMinor": 800000000,
+        "asOf": "2026-07-01"
+      }
+    },
+    "checkpointLedgers": {
+      "Main": {
+        "counts": [
+          {
+            "countedAt": "2026-06-30",
+            "countedMinor": 800000000,
+            "derivedMinor": null,
+            "gapMinor": null,
+            "kind": "opening"
+          }
+        ],
+        "pattern": {
+          "gapCount": 0,
+          "netMinor": 0,
+          "averageMinor": 0,
+          "consistent": false,
+          "kind": "none"
+        }
+      },
+      "Mom — cash": {
+        "counts": [
+          {
+            "countedAt": "2026-06-30",
+            "countedMinor": 120000000,
+            "derivedMinor": null,
+            "gapMinor": null,
+            "kind": "opening"
+          }
+        ],
+        "pattern": {
+          "gapCount": 0,
+          "netMinor": 0,
+          "averageMinor": 0,
+          "consistent": false,
+          "kind": "none"
+        }
+      },
+      "Mom — dollars": {
+        "counts": [
+          {
+            "countedAt": "2026-06-30",
+            "countedMinor": 40000,
+            "derivedMinor": null,
+            "gapMinor": null,
+            "kind": "opening"
+          }
+        ],
+        "pattern": {
+          "gapCount": 0,
+          "netMinor": 0,
+          "averageMinor": 0,
+          "consistent": false,
+          "kind": "none"
+        }
+      },
+      "Sister — cash": {
+        "counts": [
+          {
+            "countedAt": "2026-06-30",
+            "countedMinor": 0,
+            "derivedMinor": null,
+            "gapMinor": null,
+            "kind": "opening"
+          }
+        ],
+        "pattern": {
+          "gapCount": 0,
+          "netMinor": 0,
+          "averageMinor": 0,
+          "consistent": false,
+          "kind": "none"
+        }
+      },
+      "Old wallet": {
+        "counts": [],
+        "pattern": {
+          "gapCount": 0,
+          "netMinor": 0,
+          "averageMinor": 0,
+          "consistent": false,
+          "kind": "none"
+        }
+      }
+    },
+    "needsOtherSide": [
+      {
+        "key": "2026-08-01T01:09:00.000Z|11300000|+113,000 PersonA aka and PersonH opa sent back",
+        "missing": "source",
+        "currency": "UZS",
+        "amountMinor": 11300000
+      },
+      {
+        "key": "2026-08-01T00:52:00.000Z|25000000|-250k sent to PersonE",
+        "missing": "destination",
+        "currency": "UZS",
+        "amountMinor": 25000000
+      },
+      {
+        "key": "2026-08-01T00:33:00.000Z|1000000|-10k debt to PersonB",
+        "missing": "destination",
+        "currency": "UZS",
+        "amountMinor": 1000000
+      },
+      {
+        "key": "2026-08-01T00:20:00.000Z|3500|+35 got cash from PersonD aka",
+        "missing": "source",
+        "currency": "UZS",
+        "amountMinor": 3500
+      },
+      {
+        "key": "2026-08-01T00:19:00.000Z|3500000|-35k sent to PersonD aka",
+        "missing": "destination",
+        "currency": "UZS",
+        "amountMinor": 3500000
+      },
+      {
+        "key": "2026-08-01T00:07:00.000Z|15100000|+151k PersonC sister sent back",
+        "missing": "source",
+        "currency": "UZS",
+        "amountMinor": 15100000
+      },
+      {
+        "key": "2026-08-01T00:05:00.000Z|6200000|-62k debt to PersonJ book gift for PersonK",
+        "missing": "destination",
+        "currency": "UZS",
+        "amountMinor": 6200000
+      },
+      {
+        "key": "2026-08-01T00:04:00.000Z|119100000|1,191,000 transferred to PersonD aka and got 100$ cash",
+        "missing": "destination",
+        "currency": "UZS",
+        "amountMinor": 119100000
+      },
+      {
+        "key": "2026-08-01T00:03:00.000Z|15000000|-150k debt PersonA aka",
+        "missing": "destination",
+        "currency": "UZS",
+        "amountMinor": 15000000
+      },
+      {
+        "key": "2026-08-01T00:00:00.000Z|500000|+5k got debt from PersonG",
+        "missing": "source",
+        "currency": "UZS",
+        "amountMinor": 500000
+      },
+      {
+        "key": "2026-07-01T01:01:00.000Z|1000000|+10k got debt PersonB",
+        "missing": "source",
+        "currency": "UZS",
+        "amountMinor": 1000000
+      },
+      {
+        "key": "2026-07-01T00:59:00.000Z|15000000|+150k got debt PersonA aka",
+        "missing": "source",
+        "currency": "UZS",
+        "amountMinor": 15000000
+      },
+      {
+        "key": "2026-07-01T00:46:00.000Z|4200000|42k(with 105 sum CF) sent to cwker, got 45 cash and 5 went for their delivery and 40k to ehsan",
+        "missing": "destination",
+        "currency": "UZS",
+        "amountMinor": 4200000
+      },
+      {
+        "key": "2026-07-01T00:45:00.000Z|485000000|4,850,000 transferred to mom for 400$",
+        "missing": "destination",
+        "currency": "UZS",
+        "amountMinor": 485000000
+      },
+      {
+        "key": "2026-07-01T00:37:00.000Z|10000000|100k exchanged to cash with coworker",
+        "missing": "destination",
+        "currency": "UZS",
+        "amountMinor": 10000000
+      },
+      {
+        "key": "2026-07-01T00:32:00.000Z|20000000|200k to PersonG and he gave cash",
+        "missing": "destination",
+        "currency": "UZS",
+        "amountMinor": 20000000
+      },
+      {
+        "key": "2026-07-01T00:25:00.000Z|20000000|200k sent to PersonF, he sent back",
+        "missing": "destination",
+        "currency": "UZS",
+        "amountMinor": 20000000
+      }
+    ]
+  }
+}

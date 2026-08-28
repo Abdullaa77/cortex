@@ -101,6 +101,47 @@ export interface ClassifiableRow {
   direction: 'expense' | 'income';
   occurred_at: string;
   finance_categories: JoinedCategory | null;
+  /**
+   * Optional, and optional on purpose: every row that has ever existed here is
+   * so'm, and the 153 imported ones do not carry the column at all. See
+   * `countsTowardLedger`.
+   */
+  currency?: 'UZS' | 'USD';
+}
+
+/** The currency every figure on /finance is stated in. */
+export const LEDGER_CURRENCY = 'UZS';
+
+/**
+ * Whether this row belongs in the month totals.
+ *
+ * Every figure on /finance — spend, income, the everyday floor, the waterfall,
+ * the reconciliation — is a so'm figure, and always has been, because until
+ * now every row was so'm. Stage 2 introduces the first dollar account, and
+ * with it the first way for that assumption to be wrong in a way nobody would
+ * notice: $400 added into a som total reads as 400 so'm, which is not a
+ * conspicuous number in a month that runs to millions. It would simply make
+ * the month a little wrong forever.
+ *
+ * So a foreign row is left out rather than converted. Converting would put a
+ * hand-entered exchange rate underneath the month totals, and those totals are
+ * what the reconciliation and both waterfalls are built on — one rate edit
+ * would restate history. Positions are where currency is handled honestly:
+ * native per account, converted once, at a stated rate. See positions.ts.
+ *
+ * Left out is not the same as hidden. `foreignRowCount` exists so the page can
+ * say how many rows are not in the figures above it.
+ *
+ * A row with no currency is so'm. That is what the imported corpus is, and
+ * defaulting the other way would empty the page.
+ */
+export function countsTowardLedger(row: ClassifiableRow): boolean {
+  return (row.currency ?? LEDGER_CURRENCY) === LEDGER_CURRENCY;
+}
+
+/** How many rows the month figures leave out because they are not so'm. */
+export function foreignRowCount(rows: ClassifiableRow[]): number {
+  return rows.filter((r) => !countsTowardLedger(r)).length;
 }
 
 export type RowClass = 'transfer-in' | 'transfer-out' | 'income' | 'spend';
@@ -175,6 +216,9 @@ export function monthTotals(rows: TransactionRow[]): MonthTotals[] {
   const reimbursed = reimbursementsByTarget(rows);
 
   for (const row of rows) {
+    // Not so'm, so it belongs to no figure on this page. See countsTowardLedger.
+    if (!countsTowardLedger(row)) continue;
+
     const key = monthKey(row.occurred_at);
     let month = totals.get(key);
     if (!month) {
@@ -230,6 +274,7 @@ export function categoryBreakdown(
 
   for (const row of rows) {
     if (monthKey(row.occurred_at) !== key) continue;
+    if (!countsTowardLedger(row)) continue;
     if (classifyRow(row) !== 'spend') continue;
 
     // Net of anything that came back against it. This is the figure the
@@ -279,6 +324,7 @@ export function summarizeMonths(
   for (const row of rows) {
     const key = monthKey(row.occurred_at);
     if (!wanted.has(key)) continue;
+    if (!countsTowardLedger(row)) continue;
     if (classifyRow(row) !== 'spend') continue;
 
     const minor = effectiveMinor(row, reimbursed);

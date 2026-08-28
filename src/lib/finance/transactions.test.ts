@@ -1,8 +1,5 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { buildImport } from './import.ts';
-import { CATEGORY_BY_SLUG } from './categorize.ts';
 import { formatMinor, explainFlag, FLAG_EXPLANATIONS } from './parse.ts';
 import {
   filterTransactions,
@@ -15,34 +12,7 @@ import {
   NO_FILTERS,
   type TransactionRecord,
 } from './transactions.ts';
-
-const NOTES = readFileSync(
-  new URL('./__fixtures__/notes.sample.txt', import.meta.url),
-  'utf8'
-);
-
-/** Exactly what the database holds after the import. */
-const rows: TransactionRecord[] = buildImport(NOTES, 2026).rows.map((r, i) => {
-  const cat = r.categorySlug ? CATEGORY_BY_SLUG.get(r.categorySlug) : undefined;
-  return {
-    id: `row-${i}`,
-    reimburses_transaction_id: null,
-    amount_minor: r.amountMinor,
-    currency: 'UZS',
-    direction: r.direction,
-    comment: r.comment,
-    raw_input: r.rawInput,
-    category_id: cat ? `cat-${cat.slug}` : null,
-    category_source: r.categorySource,
-    needs_review: r.needsReview,
-    parse_flags: r.parseFlags,
-    occurred_at: r.occurredAt,
-    date_precision: r.datePrecision,
-    finance_categories: cat
-      ? { slug: cat.slug, name: cat.name, icon: cat.icon, color: cat.color, kind: cat.kind }
-      : null,
-  };
-});
+import { CORPUS_RECORDS as rows } from './__fixtures__/corpus.ts';
 
 /** A row typed into the app today, which does know its day. */
 const typedRow: TransactionRecord = {

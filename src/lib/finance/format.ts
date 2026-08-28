@@ -36,3 +36,28 @@ export function monthKey(iso: string): string {
   const d = new Date(iso);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
+
+/**
+ * An amount with its currency attached.
+ *
+ * Every figure on this app used to be so'm, so `formatMinor` never needed to
+ * say which. Positions are native per account, and a dollar drawer beside a
+ * som drawer makes an unlabelled number genuinely ambiguous — "400" against
+ * "1,200,000" reads as a rounding error rather than as five million so'm.
+ *
+ * The dollar sign leads and the so'm marker trails, which is how each is
+ * written in the places they come from.
+ */
+export function formatAmount(minor: number, currency: 'UZS' | 'USD'): string {
+  const body = formatMinor(Math.abs(minor));
+  const sign = minor < 0 ? '-' : '';
+  return currency === 'USD' ? `${sign}$${body}` : `${sign}${body} so'm`;
+}
+
+/** A balance that may not be known. Unknown is never rendered as zero. */
+export function formatBalance(
+  minor: number | null,
+  currency: 'UZS' | 'USD'
+): string {
+  return minor === null ? 'not counted' : formatAmount(minor, currency);
+}

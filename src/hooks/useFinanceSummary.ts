@@ -7,10 +7,15 @@ import {
   categoryBreakdown,
   availableMonthTabs,
   allMonthKeys,
+  foreignRowCount,
 } from '@/lib/finance/summarize';
 import { reconcile } from '@/lib/finance/reconcile';
+import { positionsAt, householdTotal, openingFromCheckpoints, today } from '@/lib/finance/positions';
+import { checkpointLedger, gapPattern, type MovementRow } from '@/lib/finance/checkpoints';
+import { needsOtherSide } from '@/lib/finance/transfers';
+import { UNACCOUNTED_SLUG } from '@/lib/finance/checkpoints';
 import { useTransactions } from './useTransactions';
-import { useOpeningBalance } from './useOpeningBalance';
+import { useAccounts } from './useAccounts';
 
 export type {
   MonthTotals,
@@ -22,22 +27,22 @@ export type {
 /**
  * Everything /finance needs, derived from the one row store.
  *
- * This used to fetch its own narrow projection of the transactions — enough
- * columns for the totals and no more. That was fine while the page was
- * read-only, and stopped being fine the moment a figure became clickable: a
- * drill-down that re-queries can come back with a different set of rows than
- * the one the figure was computed from, and then the modal and the number
- * above it quietly disagree.
- *
- * So the rows come from `useTransactions`, whole, once. Aggregation is a pure
+ * The rows come from `useTransactions`, whole, once. Aggregation is a pure
  * function of them, the drill-down is a filter over the same array, and edits
  * go through the same optimistic path the list uses — a correction made in the
  * modal moves the bar behind it immediately, because there is only one copy of
  * the data to move.
+ *
+ * Stage 2 adds the accounts beside them, and with them the second, independent
+ * route to the same figures: the months still walk forward from an opening
+ * balance, and the positions still walk forward from a physical count, and
+ * where the two disagree the count wins. The opening balance is no longer a
+ * table of its own — it is the sum of every account's first checkpoint, which
+ * is what an opening balance always was.
  */
 export function useFinanceSummary() {
   const store = useTransactions();
-  const opening = useOpeningBalance();
+  const accounts = useAccounts();
   const { rows } = store;
 
   /** Every month with rows, oldest first — this is what drives the tabs. */
@@ -52,9 +57,72 @@ export function useFinanceSummary() {
    */
   const allMonths = useMemo(() => monthTotals(rows), [rows]);
 
+  /**
+   * The household opening, out of the counts.
+   *
+   * Same arithmetic `reconcile` has always run; one fewer source of truth
+   * behind it. Before any account has been counted there is no opening, and
+   * the page states what the first month would have needed instead of printing
+   * a closing balance that cannot be right — exactly as before.
+   */
+  const opening = useMemo(
+    () => openingFromCheckpoints(accounts.accounts, accounts.checkpoints, accounts.rate),
+    [accounts.accounts, accounts.checkpoints, accounts.rate]
+  );
+
   const reconciliation = useMemo(
-    () => reconcile(allMonths, opening.balance),
-    [allMonths, opening.balance]
+    () =>
+      reconcile(
+        allMonths,
+        opening ? { amountMinor: opening.amountMinor, asOf: opening.asOf } : null
+      ),
+    [allMonths, opening]
+  );
+
+  /** The rows in the shape the position math reads. Built once. */
+  const movements = useMemo<MovementRow[]>(
+    () =>
+      rows.map((r) => ({
+        id: r.id,
+        amount_minor: r.amount_minor,
+        occurred_at: r.occurred_at,
+        from_account_id: r.from_account_id,
+        to_account_id: r.to_account_id,
+      })),
+    [rows]
+  );
+
+  const asOfToday = useMemo(() => today(), []);
+
+  const positions = useMemo(
+    () => positionsAt(accounts.accounts, accounts.checkpoints, movements, asOfToday),
+    [accounts.accounts, accounts.checkpoints, movements, asOfToday]
+  );
+
+  const household = useMemo(
+    () => householdTotal(positions, accounts.rate),
+    [positions, accounts.rate]
+  );
+
+  /** Every count on one account, each with the gap it found, and the pattern. */
+  const historyFor = useCallback(
+    (accountId: string) => {
+      const ledger = checkpointLedger(accountId, accounts.checkpoints, movements);
+      return { ledger, pattern: gapPattern(ledger) };
+    },
+    [accounts.checkpoints, movements]
+  );
+
+  /** Transfers still waiting on their other end. He knows; the machine does not. */
+  const openTransfers = useMemo(
+    () => needsOtherSide(rows.map((r) => ({ ...r, transfer_pair_id: r.transfer_pair_id ?? null }))),
+    [rows]
+  );
+
+  /** Where an adjustment gets filed. Never a real category. */
+  const unaccountedCategoryId = useMemo(
+    () => store.allCategories.find((c) => c.slug === UNACCOUNTED_SLUG)?.id ?? null,
+    [store.allCategories]
   );
 
   /** Comparison figures for a chosen pair of months. */
@@ -71,6 +139,9 @@ export function useFinanceSummary() {
       needsReviewCount: rows.filter((r) => r.needs_review).length,
       monthPrecisionCount: rows.filter((r) => r.date_precision === 'month').length,
       totalRows: rows.length,
+      // Rows the month figures leave out because they are not so'm. Stated
+      // rather than silently dropped.
+      foreignRowCount: foreignRowCount(rows),
     }),
     [rows]
   );
@@ -82,9 +153,17 @@ export function useFinanceSummary() {
     allMonths,
     reconciliation,
     opening,
+    accounts,
+    movements,
+    positions,
+    household,
+    historyFor,
+    openTransfers,
+    unaccountedCategoryId,
+    asOfToday,
     flags,
     compareOn,
     breakdownOn,
-    loading: store.loading || opening.loading,
+    loading: store.loading || accounts.loading,
   };
 }

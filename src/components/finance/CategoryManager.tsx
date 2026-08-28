@@ -12,7 +12,7 @@ import {
   type CategoryDraft,
   type CategoryKind,
 } from '@/lib/finance/categories';
-import { Archive, Check, Plus, RotateCcw, Trash2, X } from 'lucide-react';
+import { Archive, Check, Lock, Plus, RotateCcw, Trash2, X } from 'lucide-react';
 
 interface CategoryManagerProps {
   open: boolean;
@@ -199,14 +199,24 @@ function Row({
           {category.kind !== 'expense' && `${category.kind} · `}
           {usageCount}
         </span>
-        <button
-          type="button"
-          onClick={() => setConfirming((c) => !c)}
-          aria-label={plan.action === 'delete' ? 'Delete category' : 'Archive category'}
-          className="shrink-0 text-text-muted transition-colors hover:text-[#F59E0B]"
-        >
-          {plan.action === 'delete' ? <Trash2 size={12} /> : <Archive size={12} />}
-        </button>
+        {plan.action === 'keep' ? (
+          <span
+            title={plan.explanation}
+            aria-label={plan.explanation}
+            className="shrink-0 text-text-muted/40"
+          >
+            <Lock size={12} />
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setConfirming((c) => !c)}
+            aria-label={plan.action === 'delete' ? 'Delete category' : 'Archive category'}
+            className="shrink-0 text-text-muted transition-colors hover:text-[#F59E0B]"
+          >
+            {plan.action === 'delete' ? <Trash2 size={12} /> : <Archive size={12} />}
+          </button>
+        )}
       </div>
 
       {confirming && (

@@ -1,7 +1,5 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { buildImport } from './import.ts';
 import {
   monthTotals,
   categoryBreakdown,
@@ -11,7 +9,7 @@ import {
   categorySlugOf,
 } from './summarize.ts';
 import { drilldownRows, sumMinor, type TransactionRecord } from './transactions.ts';
-import { CATEGORY_BY_SLUG } from './categorize.ts';
+import { CORPUS_RECORDS as rows } from './__fixtures__/corpus.ts';
 
 /**
  * The drill-down's only job is to add up.
@@ -22,34 +20,6 @@ import { CATEGORY_BY_SLUG } from './categorize.ts';
  * across every category in every month of the real corpus, rather than one
  * hand-picked example.
  */
-const NOTES = readFileSync(
-  new URL('./__fixtures__/notes.sample.txt', import.meta.url),
-  'utf8'
-);
-const imported = buildImport(NOTES, 2026);
-
-const rows: TransactionRecord[] = imported.rows.map((r, i) => {
-  const cat = r.categorySlug ? CATEGORY_BY_SLUG.get(r.categorySlug) : undefined;
-  return {
-    id: `row-${i}`,
-    reimburses_transaction_id: null,
-    amount_minor: r.amountMinor,
-    currency: 'UZS',
-    direction: r.direction,
-    comment: r.comment,
-    raw_input: r.rawInput,
-    category_id: cat ? cat.slug : null,
-    category_source: 'inferred',
-    needs_review: r.needsReview,
-    parse_flags: [],
-    occurred_at: r.occurredAt,
-    date_precision: r.datePrecision,
-    finance_categories: cat
-      ? { slug: cat.slug, name: cat.name, icon: cat.icon, color: cat.color, kind: cat.kind }
-      : null,
-  };
-});
-
 const keys = allMonthKeys(rows);
 
 describe('drill-down sums to the number that was clicked', () => {
