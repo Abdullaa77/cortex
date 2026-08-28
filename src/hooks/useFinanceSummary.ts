@@ -14,6 +14,7 @@ import { positionsAt, householdTotal, openingFromCheckpoints, today } from '@/li
 import { checkpointLedger, gapPattern, type MovementRow } from '@/lib/finance/checkpoints';
 import { needsOtherSide } from '@/lib/finance/transfers';
 import { UNACCOUNTED_SLUG } from '@/lib/finance/checkpoints';
+import { beneficiaryBreakdown, floorSplit } from '@/lib/finance/beneficiary';
 import { useTransactions } from './useTransactions';
 import { useAccounts } from './useAccounts';
 
@@ -134,6 +135,22 @@ export function useFinanceSummary() {
   /** One month's spending, per category, largest first. */
   const breakdownOn = useCallback((key: string) => categoryBreakdown(rows, key), [rows]);
 
+  /**
+   * The same month's spending, grouped by who consumed it rather than by what
+   * it was. A new axis over the same money — the groups re-run the arithmetic
+   * `breakdownOn` runs and only bucket the result differently, which is why
+   * they add up to the same total.
+   */
+  const beneficiaryOn = useCallback((key: string) => beneficiaryBreakdown(rows, key), [rows]);
+
+  /**
+   * The everyday floor, split into what is genuinely shared and what is one
+   * person's. The floor barely moved between July and August while total spend
+   * swung 74%; knowing which part of it is household and which is personal is
+   * what says what can actually be cut, and by whom.
+   */
+  const floorOn = useCallback((key: string) => floorSplit(rows, key), [rows]);
+
   const flags = useMemo(
     () => ({
       needsReviewCount: rows.filter((r) => r.needs_review).length,
@@ -164,6 +181,8 @@ export function useFinanceSummary() {
     flags,
     compareOn,
     breakdownOn,
+    beneficiaryOn,
+    floorOn,
     loading: store.loading || accounts.loading,
   };
 }

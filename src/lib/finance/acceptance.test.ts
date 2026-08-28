@@ -231,3 +231,59 @@ describe('the positions, spelled out', () => {
     assert.equal(missing.filter((m: string) => m === 'destination').length, 11);
   });
 });
+
+/**
+ * Stage 3 adds an axis, not a figure. The digest above already proves nothing
+ * a user could see has moved; these are the new claims worth naming, taken
+ * from the same snapshot the pages are drawn from.
+ */
+describe('the beneficiary, spelled out', () => {
+  const { backfill, byMonth, floor } = CURRENT.beneficiary;
+
+  test('the backfill claimed nothing about the 153 imported rows', () => {
+    // THE HONESTY PROPERTY. Nobody knows who ate the July groceries, and a
+    // migration writing 'household' across them would be indistinguishable
+    // from the rows where Scott chose it. Stated as a count, so a partial
+    // regression is as loud as a total one.
+    assert.deepEqual(backfill.preCutoverHousehold, []);
+    assert.equal(backfill.importedRowCount, 153);
+    assert.equal(backfill.counts.null, backfill.rowCount - backfill.counts.household);
+    assert.ok(
+      backfill.counts.null >= backfill.importedRowCount,
+      'fewer unrecorded rows than there are imported rows — history was backfilled'
+    );
+  });
+
+  test('every month, the groups add up to that month\'s spend', () => {
+    for (const [key, month] of Object.entries(byMonth) as [string, {
+      summedMinor: number;
+      monthSpendMinor: number;
+      groups: { key: string }[];
+    }][]) {
+      assert.equal(month.summedMinor, month.monthSpendMinor, `${key}: a row was dropped`);
+      // Including the group with no answer. Omitting it is how the sum stays
+      // whole while the page stops being true.
+      assert.ok(month.groups.some((g) => g.key === 'unrecorded'), `${key}: no unrecorded group`);
+    }
+  });
+
+  test('every month, the floor splits into three parts that make the whole', () => {
+    for (const [key, split] of Object.entries(floor) as [string, {
+      coreMinor: number;
+      householdMinor: number;
+      personalMinor: number;
+      unrecordedMinor: number;
+    }][]) {
+      assert.equal(
+        split.householdMinor + split.personalMinor + split.unrecordedMinor,
+        split.coreMinor,
+        `${key}: the floor split does not add up`
+      );
+    }
+  });
+
+  test('July is entirely unrecorded, and says so', () => {
+    assert.equal(floor['2026-07'].unrecordedMinor, floor['2026-07'].coreMinor);
+    assert.equal(formatMinor(floor['2026-07'].coreMinor), '1,419,349.17');
+  });
+});

@@ -2905,5 +2905,175 @@
         "amountMinor": 20000000
       }
     ]
+  },
+  "beneficiary": {
+    "cutoverDate": "2026-08-15",
+    "backfill": {
+      "rowCount": 163,
+      "importedRowCount": 153,
+      "counts": {
+        "household": 8,
+        "null": 155
+      },
+      "preCutoverHousehold": []
+    },
+    "byMonth": {
+      "2026-07": {
+        "groups": [
+          {
+            "key": "household",
+            "label": "household",
+            "minor": 0,
+            "share": 0,
+            "rowCount": 0,
+            "unrecorded": false
+          },
+          {
+            "key": "me",
+            "label": "me",
+            "minor": 0,
+            "share": 0,
+            "rowCount": 0,
+            "unrecorded": false
+          },
+          {
+            "key": "mom",
+            "label": "mom",
+            "minor": 0,
+            "share": 0,
+            "rowCount": 0,
+            "unrecorded": false
+          },
+          {
+            "key": "sister",
+            "label": "sister",
+            "minor": 0,
+            "share": 0,
+            "rowCount": 0,
+            "unrecorded": false
+          },
+          {
+            "key": "unrecorded",
+            "label": "not recorded",
+            "minor": 345196138,
+            "share": 1,
+            "rowCount": 55,
+            "unrecorded": true
+          }
+        ],
+        "summedMinor": 345196138,
+        "monthSpendMinor": 345196138
+      },
+      "2026-08": {
+        "groups": [
+          {
+            "key": "household",
+            "label": "household",
+            "minor": 45940000,
+            "share": 0.06403810147157787,
+            "rowCount": 4,
+            "unrecorded": false
+          },
+          {
+            "key": "me",
+            "label": "me",
+            "minor": 6450000,
+            "share": 0.00899098290142963,
+            "rowCount": 1,
+            "unrecorded": false
+          },
+          {
+            "key": "mom",
+            "label": "mom",
+            "minor": 4500000,
+            "share": 0.006272778768439277,
+            "rowCount": 1,
+            "unrecorded": false
+          },
+          {
+            "key": "sister",
+            "label": "sister",
+            "minor": 35800000,
+            "share": 0.04990343998002803,
+            "rowCount": 2,
+            "unrecorded": false
+          },
+          {
+            "key": "unrecorded",
+            "label": "not recorded",
+            "minor": 624695415,
+            "share": 0.8707946968785252,
+            "rowCount": 73,
+            "unrecorded": true
+          }
+        ],
+        "summedMinor": 717385415,
+        "monthSpendMinor": 717385415
+      }
+    },
+    "floor": {
+      "2026-07": {
+        "key": "2026-07",
+        "coreMinor": 141934917,
+        "householdMinor": 0,
+        "personalMinor": 0,
+        "unrecordedMinor": 141934917,
+        "byPerson": [
+          {
+            "key": "me",
+            "label": "me",
+            "minor": 0,
+            "share": 0
+          },
+          {
+            "key": "mom",
+            "label": "mom",
+            "minor": 0,
+            "share": 0
+          },
+          {
+            "key": "sister",
+            "label": "sister",
+            "minor": 0,
+            "share": 0
+          }
+        ]
+      },
+      "2026-08": {
+        "key": "2026-08",
+        "coreMinor": 189577300,
+        "householdMinor": 30940000,
+        "personalMinor": 14750000,
+        "unrecordedMinor": 143887300,
+        "byPerson": [
+          {
+            "key": "me",
+            "label": "me",
+            "minor": 6450000,
+            "share": 0.034023060777846295
+          },
+          {
+            "key": "mom",
+            "label": "mom",
+            "minor": 4500000,
+            "share": 0.023737019147334622
+          },
+          {
+            "key": "sister",
+            "label": "sister",
+            "minor": 3800000,
+            "share": 0.020044593946638125
+          }
+        ]
+      }
+    },
+    "keys": [
+      "household",
+      "me",
+      "mom",
+      "sister",
+      "unrecorded"
+    ],
+    "unrecordedKeyOfImportedRow": "unrecorded"
   }
 }

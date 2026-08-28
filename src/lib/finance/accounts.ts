@@ -19,7 +19,19 @@
  * stops being used daily, and every number downstream rots.
  */
 
-export type AccountOwner = 'me' | 'mom' | 'sister';
+/**
+ * The people whose money this is. ONE LIST, and everything else derives from
+ * it — `AccountOwner` below, and `Beneficiary` in beneficiary.ts, which is
+ * this list plus 'household'.
+ *
+ * Retyping the three names in a second place is how a fourth person gets added
+ * to one of them and not the other, and then a beneficiary the accounts cannot
+ * express sits in the ledger looking legitimate. Migration 010 does the same
+ * thing in SQL with `is_finance_person()`, for the same reason.
+ */
+export const ACCOUNT_OWNERS = ['me', 'mom', 'sister'] as const;
+
+export type AccountOwner = (typeof ACCOUNT_OWNERS)[number];
 export type AccountCurrency = 'UZS' | 'USD';
 export type AccountKind = 'cash' | 'card' | 'savings';
 

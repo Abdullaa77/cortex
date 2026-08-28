@@ -54,6 +54,7 @@ function TransactionsView() {
     loading,
     error,
     setCategory,
+    setBeneficiary,
     updateRow,
     deleteRow,
     acceptRow,
@@ -204,6 +205,7 @@ function TransactionsView() {
                     allRows={rows}
                     onLink={linkReimbursement}
                     onUnlink={unlinkReimbursement}
+                    onSetBeneficiary={setBeneficiary}
                   />
                 ))}
               </div>

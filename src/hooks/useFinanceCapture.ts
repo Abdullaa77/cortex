@@ -7,6 +7,7 @@ import { parseLine } from '@/lib/finance/parse';
 import { planNotMoney, type Booking, type RouteDecision } from '@/lib/finance/route';
 import { classifyRow } from '@/lib/finance/summarize';
 import { sidesForClass } from '@/lib/finance/accounts';
+import { HOUSEHOLD, takesBeneficiary } from '@/lib/finance/beneficiary';
 
 interface CategoryRecord {
   id: string;
@@ -141,6 +142,26 @@ export function useFinanceCapture() {
             ? defaultAccountId.current
             : null;
 
+        /**
+         * The row as the read path sees it. Built once and asked twice — which
+         * side of the account it touched, and whether it has a beneficiary at
+         * all. Two questions, one description of the row, so they cannot come
+         * to answer different rows.
+         */
+        const classifiable = {
+          direction: txn.direction,
+          occurred_at: now,
+          finance_categories: category
+            ? {
+                slug: category.slug,
+                name: category.name,
+                icon: category.icon,
+                color: category.color,
+                kind: category.kind,
+              }
+            : null,
+        };
+
         return {
           user_id: userId,
           area_id: financeAreaId.current,
@@ -156,23 +177,28 @@ export function useFinanceCapture() {
           occurred_at: now,
           // Typed here, so the day is real. Imported rows stay 'month'.
           date_precision: 'day' as const,
+          /**
+           * Who it was for. The household is the ordinary answer in a household
+           * that eats together, so it is the default — and defaulting is honest
+           * HERE and nowhere else, because the person is sitting in front of the
+           * confirmation strip and can change it in one tap. A migration writing
+           * the same value across history has nobody in front of it, which is
+           * why backfillBeneficiary refuses to.
+           *
+           * Income, transfers and the adjustment get NULL: they have no
+           * beneficiary at all, rather than one nobody has chosen yet.
+           *
+           * NO SIGIL FOR IT IN THE CAPTURE GRAMMAR. No `@me`, no `>mom`. That
+           * parser has produced two real bugs already — the k/m suffix
+           * swallowing the first letter of the next word turned `87,549
+           * korzinka` into 87.5 million — and it is the only thing standing
+           * between a typo and a wrong ledger. Adding a sigil to it to save
+           * four seconds is a bad trade. The beneficiary is set by editing the
+           * row afterwards.
+           */
+          beneficiary: takesBeneficiary(classifiable) ? HOUSEHOLD : null,
           ...(account
-            ? sidesForClass(
-                classifyRow({
-                  direction: txn.direction,
-                  occurred_at: now,
-                  finance_categories: category
-                    ? {
-                        slug: category.slug,
-                        name: category.name,
-                        icon: category.icon,
-                        color: category.color,
-                        kind: category.kind,
-                      }
-                    : null,
-                }),
-                account
-              )
+            ? sidesForClass(classifyRow(classifiable), account)
             : { from_account_id: null, to_account_id: null }),
         };
       });

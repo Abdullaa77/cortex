@@ -13,6 +13,7 @@ import {
   type JoinedCategory,
 } from './summarize.ts';
 import type { AccountSides } from './accounts.ts';
+import type { Beneficiary } from './beneficiary.ts';
 import {
   reimbursementsByTarget,
   effectiveMinor,
@@ -40,6 +41,13 @@ export interface TransactionRecord extends AccountSides {
    * cannot hold both amounts. See transfers.ts.
    */
   transfer_pair_id: string | null;
+  /**
+   * Who consumed it — a different fact from whose money it was, which is the
+   * owner of the account it left. NULL means nobody recorded it, and is
+   * rendered as "not recorded" rather than as the household. See
+   * beneficiary.ts, and read `beneficiaryOf(row)` rather than this field.
+   */
+  beneficiary: Beneficiary | null;
   finance_categories: JoinedCategory | null;
   // from_account_id / to_account_id come from AccountSides. Which side a row
   // touches is decided by what it COUNTS AS, never by `direction` — see

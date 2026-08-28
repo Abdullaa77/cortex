@@ -7,6 +7,7 @@ import { useFinanceSummary } from '@/hooks/useFinanceSummary';
 import MonthTabs from '@/components/finance/MonthTabs';
 import MonthTotalsHeader from '@/components/finance/MonthTotalsHeader';
 import MonthCategoryList from '@/components/finance/MonthCategoryList';
+import BeneficiaryBreakdown from '@/components/finance/BeneficiaryBreakdown';
 import CategoryRow from '@/components/finance/CategoryRow';
 import WaterfallChart from '@/components/finance/WaterfallChart';
 import ReconcileBlock from '@/components/finance/ReconcileBlock';
@@ -45,9 +46,12 @@ export default function FinancePage() {
     flags,
     compareOn,
     breakdownOn,
+    beneficiaryOn,
+    floorOn,
     loading,
     error,
     setCategory,
+    setBeneficiary,
     updateRow,
     deleteRow,
     acceptRow,
@@ -91,6 +95,17 @@ export default function FinancePage() {
   const slices = useMemo(
     () => (activeKey ? breakdownOn(activeKey) : []),
     [activeKey, breakdownOn]
+  );
+
+  // The same month's money, grouped by who consumed it rather than by what it
+  // was. A new axis over the figures above, never a second opinion about them.
+  const beneficiaryGroups = useMemo(
+    () => (activeKey ? beneficiaryOn(activeKey) : []),
+    [activeKey, beneficiaryOn]
+  );
+  const floor = useMemo(
+    () => (activeKey ? floorOn(activeKey) : null),
+    [activeKey, floorOn]
   );
 
   const ledger = activeKey ? ledgerFor(reconciliation, activeKey) : null;
@@ -277,6 +292,17 @@ export default function FinancePage() {
           )
         )}
 
+        {floor && (
+          <>
+            <SectionHeader title="WHO IT WAS FOR" />
+            <BeneficiaryBreakdown
+              monthLabel={activeLabel}
+              floor={floor}
+              groups={beneficiaryGroups}
+            />
+          </>
+        )}
+
         <SectionHeader title="RECONCILE" />
         <ReconcileBlock ledgers={shownLedgers} />
 
@@ -366,6 +392,7 @@ export default function FinancePage() {
         onAccept={acceptRow}
         onLink={linkReimbursement}
         onUnlink={unlinkReimbursement}
+        onSetBeneficiary={setBeneficiary}
         onManageCategories={() => setManagingCategories(true)}
       />
 
