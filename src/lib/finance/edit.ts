@@ -14,6 +14,8 @@
  * would flip precision on rows nobody touched.
  */
 
+import type { Beneficiary } from './beneficiary.ts';
+
 export type Direction = 'expense' | 'income';
 export type DatePrecision = 'day' | 'month';
 
@@ -52,6 +54,14 @@ export interface RowPatch {
    */
   from_account_id?: string | null;
   to_account_id?: string | null;
+  /**
+   * Who consumed it. Also not produced by `buildRowPatch` — the edit form does
+   * not ask, because capture does not ask either. It is set from its own chip
+   * on the row, one tap, the same way the category is. Null clears it back to
+   * "not recorded", which has to stay reachable: a beneficiary entered by
+   * mistake must be removable without inventing a different one.
+   */
+  beneficiary?: Beneficiary | null;
 }
 
 export interface BuildPatchResult {

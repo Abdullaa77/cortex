@@ -21,6 +21,8 @@ import {
   MOVEMENTS,
   PAIRABLE_ROWS,
   FX_RATE,
+  BENEFICIARY_CORPUS,
+  CUTOVER_DATE,
 } from '../src/lib/finance/__fixtures__/corpus.ts';
 import { summarize, monthTotals, categoryBreakdown } from '../src/lib/finance/summarize.ts';
 import { reconcile } from '../src/lib/finance/reconcile.ts';
@@ -32,6 +34,16 @@ import {
 } from '../src/lib/finance/positions.ts';
 import { checkpointLedger, gapPattern } from '../src/lib/finance/checkpoints.ts';
 import { needsOtherSide } from '../src/lib/finance/transfers.ts';
+import {
+  BENEFICIARIES,
+  UNRECORDED,
+  backfillBeneficiary,
+  beneficiaryBreakdown,
+  beneficiaryKeyOf,
+  floorSplit,
+} from '../src/lib/finance/beneficiary.ts';
+import { isPreCutover } from '../src/lib/finance/cutover.ts';
+import { allMonthKeys } from '../src/lib/finance/summarize.ts';
 import {
   groupByMonth,
   listStats,
@@ -202,6 +214,81 @@ const snapshot = {
       currency: o.row.currency,
       amountMinor: o.row.amount_minor,
     })),
+  },
+
+  // ============================================
+  // Stage 3 — who consumed it
+  // ============================================
+  // Appended, never woven in. Beneficiary is a new axis over the same money and
+  // must move nothing above it; the sections before this one are unchanged, and
+  // acceptance.test.ts checks that separately from this one existing.
+  //
+  // Read over BENEFICIARY_CORPUS — the 153 imported rows plus the captures made
+  // after the cutover — because the split only means anything where both kinds
+  // of row are present. Every figure above is still derived from the 153 alone.
+  beneficiary: {
+    cutoverDate: CUTOVER_DATE,
+
+    // What the backfill would write, row by row, counted. The claim being
+    // recorded here is that the historical rows get NOTHING.
+    backfill: (() => {
+      const counts = { household: 0, null: 0 };
+      const preCutoverHousehold = [];
+      for (const row of BENEFICIARY_CORPUS) {
+        const decided = backfillBeneficiary(
+          row,
+          CUTOVER_DATE,
+          isPreCutover(row, CUTOVER_DATE)
+        );
+        counts[decided === null ? 'null' : decided]++;
+        if (decided !== null && isPreCutover(row, CUTOVER_DATE))
+          preCutoverHousehold.push(row.id);
+      }
+      return {
+        rowCount: BENEFICIARY_CORPUS.length,
+        importedRowCount: CORPUS_ROWS.length,
+        counts,
+        // Must be empty. A non-empty list here is the falsehood the stage
+        // exists to refuse, spelled out by row id.
+        preCutoverHousehold,
+      };
+    })(),
+
+    // Every group, every month, including the empty ones and the unrecorded
+    // one — with the month's own spend beside them, so the snapshot records
+    // that they add up rather than only that they exist.
+    byMonth: Object.fromEntries(
+      allMonthKeys(BENEFICIARY_CORPUS).map((key) => {
+        const groups = beneficiaryBreakdown(BENEFICIARY_CORPUS, key);
+        const month = monthTotals(BENEFICIARY_CORPUS).find((m) => m.key === key);
+        return [
+          key,
+          {
+            groups: groups.map((g) => ({
+              key: g.key,
+              label: g.label,
+              minor: g.minor,
+              share: g.share,
+              rowCount: g.rowCount,
+              unrecorded: g.unrecorded,
+            })),
+            summedMinor: groups.reduce((n, g) => n + g.minor, 0),
+            monthSpendMinor: month.spendMinor,
+          },
+        ];
+      })
+    ),
+
+    // The everyday floor, split into what is shared and what is one person's.
+    // The question the stage was built to answer.
+    floor: Object.fromEntries(
+      allMonthKeys(BENEFICIARY_CORPUS).map((key) => [key, floorSplit(BENEFICIARY_CORPUS, key)])
+    ),
+
+    // The group each value falls into, so a renaming or a re-keying shows up
+    // as a moved figure rather than as nothing at all.
+    keys: [...BENEFICIARIES, UNRECORDED],
+    unrecordedKeyOfImportedRow: beneficiaryKeyOf(CORPUS_ROWS[0]),
   },
 };
 

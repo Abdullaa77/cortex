@@ -8,6 +8,7 @@ import { drilldownRows, sumMinor } from '@/lib/finance/transactions';
 import type { TransactionRecord } from '@/lib/finance/transactions';
 import type { CategoryOption } from '@/hooks/useTransactions';
 import type { RowPatch } from '@/lib/finance/edit';
+import type { Beneficiary } from '@/lib/finance/beneficiary';
 import { ArrowRight } from 'lucide-react';
 
 export interface DrilldownTarget {
@@ -25,12 +26,13 @@ interface CategoryDrilldownProps {
   rows: TransactionRecord[];
   categories: CategoryOption[];
   onClose: () => void;
-  onSetCategory: (id: string, categoryId: string) => Promise<void>;
+  onSetCategory: (id: string, categoryId: string) => Promise<Beneficiary | null>;
   onUpdate: (id: string, patch: RowPatch) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   onAccept: (id: string) => Promise<void>;
   onLink: (sourceId: string, targetId: string) => Promise<string | null>;
   onUnlink: (sourceId: string) => Promise<void>;
+  onSetBeneficiary: (id: string, beneficiary: Beneficiary | null) => Promise<void>;
   onManageCategories: () => void;
 }
 
@@ -57,6 +59,7 @@ export default function CategoryDrilldown({
   onAccept,
   onLink,
   onUnlink,
+  onSetBeneficiary,
   onManageCategories,
 }: CategoryDrilldownProps) {
   if (!target) return null;
@@ -111,6 +114,7 @@ export default function CategoryDrilldown({
               allRows={rows}
               onLink={onLink}
               onUnlink={onUnlink}
+              onSetBeneficiary={onSetBeneficiary}
             />
           ))}
         </div>

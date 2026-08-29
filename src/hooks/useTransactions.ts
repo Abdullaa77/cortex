@@ -6,6 +6,12 @@ import { useCategoryAssignment } from './useCategoryAssignment';
 import type { TransactionRecord } from '@/lib/finance/transactions';
 import type { RowPatch } from '@/lib/finance/edit';
 import { canLink } from '@/lib/finance/links';
+import {
+  clearsBeneficiary,
+  takesBeneficiary,
+  type Beneficiary,
+} from '@/lib/finance/beneficiary';
+import { UNACCOUNTED_SLUG } from '@/lib/finance/checkpoints';
 import { activeCategories, type CategoryRecord } from '@/lib/finance/categories';
 
 export interface CategoryOption {
@@ -21,6 +27,7 @@ const SELECT =
   'id, amount_minor, currency, direction, comment, raw_input, category_id, ' +
   'category_source, needs_review, parse_flags, occurred_at, date_precision, ' +
   'reimburses_transaction_id, from_account_id, to_account_id, transfer_pair_id, ' +
+  'beneficiary, ' +
   'finance_categories(slug, name, icon, color, kind)';
 
 /**
@@ -71,13 +78,31 @@ export function useTransactions() {
     fetchAll();
   }, [fetchAll]);
 
+  /**
+   * Refile a row.
+   *
+   * Returns the beneficiary this edit DROPPED, if it dropped one, so the row
+   * can say so. Migration 010's trigger clears the beneficiary when a spend row
+   * becomes income, a transfer or the adjustment — correct, because for those
+   * rows NULL is the only right answer, but a value the user chose vanishing
+   * because they changed something else needs to be mentioned once rather than
+   * discovered later. Null when nothing was lost, which is almost always.
+   */
   const setCategory = useCallback(
-    async (transactionId: string, categoryId: string) => {
+    async (transactionId: string, categoryId: string): Promise<Beneficiary | null> => {
       // Searched across everything, not just the active list — a row already
       // filed under an archived category must still be re-assignable to it.
       const category = allCategories.find((c) => c.id === categoryId);
       const target = rows.find((r) => r.id === transactionId);
-      if (!category || !target) return;
+      if (!category || !target) return null;
+
+      const dropped = clearsBeneficiary(target, {
+        slug: category.slug,
+        name: category.name,
+        icon: category.icon,
+        color: category.color,
+        kind: category.kind,
+      });
 
       const prev = rows;
       setRows((curr) =>
@@ -88,6 +113,17 @@ export function useTransactions() {
                 category_id: categoryId,
                 category_source: 'confirmed',
                 needs_review: false,
+                // Mirrors migration 010's trigger, the same way deleteRow
+                // mirrors ON DELETE SET NULL. Filing a grocery row under
+                // Income clears its beneficiary at the database; without this
+                // the local copy would keep it until the next fetch. Nothing
+                // would render it — beneficiaryOf() refuses non-spend rows —
+                // but a local copy that disagrees with storage is how the
+                // half-deleted pair got its own mutation test.
+                beneficiary:
+                  category.kind === 'expense' && category.slug !== UNACCOUNTED_SLUG
+                    ? r.beneficiary
+                    : null,
                 finance_categories: {
                   slug: category.slug,
                   name: category.name,
@@ -104,7 +140,9 @@ export function useTransactions() {
         await assign(transactionId, target.comment, categoryId);
       } catch {
         setRows(prev);
+        return null;
       }
+      return dropped;
     },
     [assign, allCategories, rows]
   );
@@ -164,6 +202,39 @@ export function useTransactions() {
       const { error: err } = await supabase
         .from('transactions')
         .delete()
+        .eq('id', transactionId);
+
+      if (err) setRows(prev);
+    },
+    [supabase, rows]
+  );
+
+  /**
+   * Say who this was for — or unsay it.
+   *
+   * Its own call rather than a field on the edit form, because it is one tap
+   * from the list and the form is behind a pencil. Null is a real answer here:
+   * it puts the row back to "not recorded", which has to stay reachable, or a
+   * beneficiary picked by mistake could only be replaced and never removed.
+   *
+   * Refused on rows that have none by definition — income, transfers, the
+   * unaccounted adjustment. The database clears those anyway and the read path
+   * ignores them, but writing a value that three layers will discard is not
+   * something the UI should be able to ask for.
+   */
+  const setBeneficiary = useCallback(
+    async (transactionId: string, beneficiary: Beneficiary | null) => {
+      const target = rows.find((r) => r.id === transactionId);
+      if (!target || (beneficiary !== null && !takesBeneficiary(target))) return;
+
+      const prev = rows;
+      setRows((curr) =>
+        curr.map((r) => (r.id === transactionId ? { ...r, beneficiary } : r))
+      );
+
+      const { error: err } = await supabase
+        .from('transactions')
+        .update({ beneficiary })
         .eq('id', transactionId);
 
       if (err) setRows(prev);
@@ -330,6 +401,7 @@ export function useTransactions() {
     error,
     refetch: fetchAll,
     setCategory,
+    setBeneficiary,
     updateRow,
     deleteRow,
     acceptRow,

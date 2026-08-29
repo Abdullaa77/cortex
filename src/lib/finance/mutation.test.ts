@@ -13,8 +13,21 @@ import {
 import { householdTotal, openingFromCheckpoints, positionsAt } from './positions.ts';
 import { needsOtherSide, planPairDeletion, type PairableRow } from './transfers.ts';
 import { categoryBreakdown, classifyRow, monthTotals } from './summarize.ts';
-import { movementShape, sidesForClass } from './accounts.ts';
-import { dayKey, atLocalNoon } from './cutover.ts';
+import { ACCOUNT_OWNERS, movementShape, sidesForClass } from './accounts.ts';
+import {
+  HOUSEHOLD,
+  UNRECORDED,
+  backfillBeneficiary,
+  beneficiaryBreakdown,
+  beneficiaryKeyOf,
+  beneficiaryOf,
+  clearsBeneficiary,
+  floorSplit,
+  takesBeneficiary,
+  type BeneficiaryRow,
+} from './beneficiary.ts';
+import { CATEGORY_BY_SLUG } from './categorize.ts';
+import { dayKey, atLocalNoon, isPreCutover } from './cutover.ts';
 import {
   ACCOUNTS,
   CHECKPOINTS,
@@ -22,6 +35,9 @@ import {
   PAIRABLE_ROWS,
   CORPUS_ROWS,
   CORPUS_RECORDS,
+  BENEFICIARY_CORPUS,
+  CAPTURE_ROWS,
+  CUTOVER_DATE,
   FX_RATE,
   MAIN_ID,
   MOM_USD_ID,
@@ -73,6 +89,25 @@ const count = (day: string, minor: number, account = A): BalanceCheckpoint => ({
   note: null,
   adjustment_transaction_id: null,
 });
+
+/** A spend-shaped row filed under `slug`, for the Stage 3 mutants. */
+let benSeq = 0;
+const row_for = (slug: string): BeneficiaryRow => {
+  const c = CATEGORY_BY_SLUG.get(slug);
+  return {
+    id: `ben-${benSeq++}`,
+    reimburses_transaction_id: null,
+    amount_minor: 100_00,
+    direction: slug === 'income' ? 'income' : 'expense',
+    occurred_at: atLocalNoon('2026-08-20'),
+    date_precision: 'day',
+    needs_review: false,
+    beneficiary: null,
+    finance_categories: c
+      ? { slug: c.slug, name: c.name, icon: c.icon, color: c.color, kind: c.kind }
+      : { slug, name: slug, icon: '?', color: '#000', kind: 'expense' },
+  };
+};
 
 const CHECKS = [count('2026-08-01', 100_000)];
 const ROWS = [move('2026-08-05', 30_000, A, null)];
@@ -452,5 +487,284 @@ describe('a half-deleted pair does not orphan quietly', () => {
   test('warning on every delete is caught — a warning nobody reads is none', () => {
     const mutantAlwaysWarns = () => 'This row is part of a pair.';
     detects(() => assert.equal(mutantAlwaysWarns(), planPairDeletion(som, PAIRABLE_ROWS).warning));
+  });
+});
+
+
+/**
+ * STAGE 3 — the beneficiary.
+ *
+ * The new axis is who CONSUMED the money, as against whose money it was. Two
+ * different facts, and every mutant below is a way of collapsing them, or of
+ * turning "nobody recorded this" into a claim that somebody did.
+ *
+ * The first of them is the one worth the most. A backfill that writes
+ * 'household' across 153 historical rows does not merely add wrong rows — it
+ * makes them INDISTINGUISHABLE from the rows where Scott really did choose
+ * household, which destroys the meaning of the right ones too. There is no
+ * later repair for that, which is why it is pinned before anything else.
+ */
+describe('the cleared-beneficiary notice is genuinely pinned', () => {
+  test('a notice that never fires is caught', () => {
+    // Silent is the correct BEHAVIOUR and the wrong amount of explanation. A
+    // clearsBeneficiary that always returned null would leave the trigger doing
+    // exactly the right thing with nobody told about it.
+    const mutant = () => null;
+    const spend: BeneficiaryRow = { ...row_for('groceries'), beneficiary: HOUSEHOLD };
+
+    detects(() =>
+      assert.equal(mutant(), clearsBeneficiary(spend, row_for('income').finance_categories))
+    );
+  });
+
+  test('a notice that fires on every recategorisation is caught', () => {
+    // The other failure. A warning shown when nothing was taken away is a
+    // warning nobody reads by the third time — the same argument the pair
+    // deletion warning already makes.
+    const spend: BeneficiaryRow = { ...row_for('groceries'), beneficiary: HOUSEHOLD };
+    const mutant = () => HOUSEHOLD;
+
+    detects(() =>
+      assert.equal(mutant(), clearsBeneficiary(spend, row_for('transport').finance_categories))
+    );
+  });
+
+  test('reporting a beneficiary the row never had is caught', () => {
+    // Announcing that "for household" was cleared on a row that was unrecorded
+    // all along tells the user they lost something they never chose.
+    const unrecorded = row_for('groceries');
+    const mutant = () => HOUSEHOLD;
+
+    detects(() =>
+      assert.equal(mutant(), clearsBeneficiary(unrecorded, row_for('income').finance_categories))
+    );
+  });
+});
+
+describe('the honesty of the backfill is genuinely pinned', () => {
+  const decide = (r: BeneficiaryRow) =>
+    backfillBeneficiary(r, CUTOVER_DATE, isPreCutover(r, CUTOVER_DATE));
+
+  test('backfilling the 153 imported rows as household is caught', () => {
+    // THE ONE THAT MATTERS. The mutant is the obvious implementation: give
+    // every expense the common answer and move on.
+    const mutant = (r: BeneficiaryRow) => (takesBeneficiary(r) ? HOUSEHOLD : null);
+
+    detects(() => {
+      for (const r of CORPUS_ROWS as BeneficiaryRow[])
+        assert.equal(mutant(r), decide(r), `${r.id} was given a consumer nobody checked`);
+    });
+  });
+
+  test('backfilling pre-cutover rows as household is caught on its own', () => {
+    // Narrower than the above: this mutant respects the cutover for the
+    // reconstructed rows but not for a pre-cutover capture, which is the
+    // version somebody would actually write while believing they had handled
+    // it.
+    const mutant = (r: BeneficiaryRow) =>
+      takesBeneficiary(r) && r.date_precision === 'day' ? HOUSEHOLD : null;
+    const preCutoverCapture = {
+      ...CAPTURE_ROWS[0],
+      id: 'pre-cutover-capture',
+      occurred_at: atLocalNoon('2026-08-14'),
+    };
+
+    assert.equal(isPreCutover(preCutoverCapture, CUTOVER_DATE), true);
+    detects(() => assert.equal(mutant(preCutoverCapture), decide(preCutoverCapture)));
+  });
+
+  test('a backfill that ignores a missing cutover is caught', () => {
+    // With no line drawn, isPreCutover is false for everything by design. A
+    // backfill that only asks that question would then claim the whole of
+    // history — the exact opposite of what the absence of a cutover means.
+    const mutant = (r: BeneficiaryRow) =>
+      takesBeneficiary(r) && r.date_precision === 'day' && !isPreCutover(r, null)
+        ? HOUSEHOLD
+        : null;
+    const capture = CAPTURE_ROWS[0];
+
+    detects(() =>
+      assert.equal(mutant(capture), backfillBeneficiary(capture, null, isPreCutover(capture, null)))
+    );
+  });
+
+  test('the default reaching income is caught', () => {
+    // Income has no beneficiary: money arriving has not been consumed by
+    // anyone. A default applied by direction alone would hand every salary a
+    // consumer.
+    const mutantDefault = () => HOUSEHOLD;
+    const salary = row_for('income');
+
+    detects(() => assert.equal(mutantDefault(), decide(salary)));
+    detects(() => assert.equal(mutantDefault(), beneficiaryOf({ ...salary, beneficiary: HOUSEHOLD })));
+  });
+
+  test('the default reaching a transfer or the adjustment is caught', () => {
+    const mutantDefault = () => HOUSEHOLD;
+    for (const r of [row_for('transfer'), row_for('unaccounted')])
+      detects(() => assert.equal(mutantDefault(), beneficiaryOf({ ...r, beneficiary: HOUSEHOLD })));
+  });
+});
+
+describe('null-is-not-household is genuinely pinned', () => {
+  test('rendering an unrecorded row as household is caught', () => {
+    // The read-path version of the backfill defect, and the one that survives
+    // a correct backfill: `beneficiaryOf(row) ?? 'household'` anywhere between
+    // the query and the screen puts the same falsehood on the page.
+    const mutantKey = (r: BeneficiaryRow) => beneficiaryOf(r) ?? HOUSEHOLD;
+    const unrecorded = CORPUS_ROWS[0] as BeneficiaryRow;
+
+    detects(() => assert.equal(mutantKey(unrecorded), beneficiaryKeyOf(unrecorded)));
+  });
+
+  test('a breakdown that folds the unrecorded group into household is caught', () => {
+    const real = beneficiaryBreakdown(BENEFICIARY_CORPUS, '2026-08');
+    const household = real.find((g) => g.key === HOUSEHOLD)!;
+    const unrecorded = real.find((g) => g.key === UNRECORDED)!;
+    assert.ok(unrecorded.minor > 0, 'August must have unrecorded spend for this to mean anything');
+
+    const mutantHousehold = household.minor + unrecorded.minor;
+    detects(() => assert.equal(mutantHousehold, household.minor));
+  });
+
+  test('dropping the unrecorded rows from the denominator is caught', () => {
+    // The subtlest of the three. Every group still exists, every figure is a
+    // real sum — only the shares are computed over a smaller whole, so the
+    // household reads as a larger fraction of the month than the money
+    // supports. Nothing on screen looks wrong.
+    const real = beneficiaryBreakdown(BENEFICIARY_CORPUS, '2026-08');
+    const recorded = real
+      .filter((g) => g.key !== UNRECORDED)
+      .reduce((n, g) => n + g.minor, 0);
+    const household = real.find((g) => g.key === HOUSEHOLD)!;
+    const mutantShare = household.minor / recorded;
+
+    detects(() => assert.equal(mutantShare, household.share));
+  });
+
+  test('a breakdown that omits the unrecorded group entirely is caught', () => {
+    const real = beneficiaryBreakdown(BENEFICIARY_CORPUS, '2026-08');
+    const mutant = real.filter((g) => g.key !== UNRECORDED);
+    const month = monthTotals(BENEFICIARY_CORPUS).find((m) => m.key === '2026-08')!;
+
+    detects(() =>
+      assert.equal(
+        mutant.reduce((n, g) => n + g.minor, 0),
+        month.spendMinor
+      )
+    );
+  });
+
+  test('a floor split that loses its unrecorded part is caught', () => {
+    const real = floorSplit(BENEFICIARY_CORPUS, '2026-08');
+    const mutant = { ...real, unrecordedMinor: 0 };
+    detects(() =>
+      assert.equal(
+        mutant.householdMinor + mutant.personalMinor + mutant.unrecordedMinor,
+        real.coreMinor
+      )
+    );
+  });
+
+  test('a floor split that quietly absorbs it into household is caught', () => {
+    // Adds up perfectly, which is what makes it dangerous — the arithmetic
+    // check alone would pass it.
+    const real = floorSplit(BENEFICIARY_CORPUS, '2026-08');
+    const mutant = {
+      ...real,
+      householdMinor: real.householdMinor + real.unrecordedMinor,
+      unrecordedMinor: 0,
+    };
+    assert.equal(
+      mutant.householdMinor + mutant.personalMinor + mutant.unrecordedMinor,
+      real.coreMinor
+    );
+    detects(() => assert.equal(mutant.householdMinor, real.householdMinor));
+  });
+});
+
+describe('funding is not consumption — the collapse is genuinely pinned', () => {
+  /** The captures, as the database holds them: funded from Scott's own drawer. */
+  const funded = CAPTURE_ROWS.map((r) => ({
+    ...r,
+    from_account_id: MAIN_ID,
+    to_account_id: null,
+  }));
+
+  test('reading the paying account\'s owner as the beneficiary is caught', () => {
+    // THE COLLAPSE, stated exactly. Scott is the single point every som passes
+    // through, so every row is funded from his drawer; a view that read the
+    // owner would report the household's groceries as his personal spending
+    // and turn the whole page into an accusation.
+    const ownerOf = (id: string | null) =>
+      ACCOUNTS.find((a) => a.id === id)?.owner ?? null;
+    const mutant = (r: (typeof funded)[number]) => ownerOf(r.from_account_id);
+
+    for (const r of funded) {
+      assert.equal(mutant(r), 'me', 'every capture is funded from Main, by construction');
+      if (beneficiaryOf(r) !== 'me') detects(() => assert.equal(mutant(r), beneficiaryOf(r)));
+    }
+  });
+
+  test('and the whole-month consequence is caught, not just one row', () => {
+    const real = beneficiaryBreakdown(funded, '2026-08');
+    const mutantMe = funded.reduce((n, r) => n + r.amount_minor, 0);
+    const realMe = real.find((g) => g.key === 'me')!.minor;
+
+    detects(() => assert.equal(mutantMe, realMe));
+    // What it would have claimed: everything, under one name.
+    assert.ok(real.find((g) => g.key === HOUSEHOLD)!.minor > realMe);
+  });
+
+  test('an owner used as a beneficiary value is caught', () => {
+    // The other direction of the same collapse: 'household' is a beneficiary
+    // and never an owner, so a value list built from ACCOUNT_OWNERS alone
+    // would have nowhere to put the common answer.
+    const mutantValues = [...ACCOUNT_OWNERS];
+    detects(() => assert.ok(mutantValues.includes(HOUSEHOLD as never)));
+  });
+});
+
+describe('the new axis moving an old figure is genuinely pinned', () => {
+  test('beneficiary leaking into a category total is caught', () => {
+    // A category total is about WHAT the money was, and must not change when
+    // WHO it was for does. The mutant is a breakdown that counts only the rows
+    // with a recorded beneficiary — the shape you get from an inner join.
+    const key = '2026-08';
+    const real = categoryBreakdown(BENEFICIARY_CORPUS, key);
+    const mutant = categoryBreakdown(
+      BENEFICIARY_CORPUS.filter((r) => beneficiaryOf(r) !== null),
+      key
+    );
+
+    detects(() =>
+      assert.deepEqual(
+        mutant.map((s) => [s.slug, s.minor]),
+        real.map((s) => [s.slug, s.minor])
+      )
+    );
+  });
+
+  test('beneficiary leaking into the everyday floor is caught', () => {
+    const key = '2026-08';
+    const real = monthTotals(BENEFICIARY_CORPUS).find((m) => m.key === key)!;
+    const mutant = monthTotals(
+      BENEFICIARY_CORPUS.filter((r) => beneficiaryOf(r) !== null)
+    ).find((m) => m.key === key)!;
+
+    detects(() => assert.equal(mutant.coreMinor, real.coreMinor));
+    detects(() => assert.equal(mutant.spendMinor, real.spendMinor));
+  });
+
+  test('a second everyday floor is caught', () => {
+    // floorSplit derives coreMinor itself rather than being handed it. If its
+    // filter ever drifted from CORE_SLUGS there would be two floors on one
+    // page disagreeing, and no way to tell which was the one being steered by.
+    const key = '2026-08';
+    const real = monthTotals(BENEFICIARY_CORPUS).find((m) => m.key === key)!;
+    const mutantCore = real.coreMinor + 1;
+
+    detects(() => assert.equal(mutantCore, floorSplit(BENEFICIARY_CORPUS, key).coreMinor));
+    assert.equal(floorSplit(BENEFICIARY_CORPUS, key).coreMinor, real.coreMinor);
   });
 });

@@ -12,14 +12,28 @@ import {
 import { linkCandidates, reimbursementsByTarget, effectiveMinor } from '@/lib/finance/links';
 import { planPairDeletion } from '@/lib/finance/transfers';
 import { buildRowPatch, toDraft, type RowDraft, type RowPatch } from '@/lib/finance/edit';
+import {
+  BENEFICIARIES,
+  BENEFICIARY_LABEL,
+  UNRECORDED,
+  beneficiaryOf,
+  takesBeneficiary,
+  type Beneficiary,
+} from '@/lib/finance/beneficiary';
+
 import type { CategoryOption } from '@/hooks/useTransactions';
-import { AlertTriangle, Check, Link2, Link2Off, Pencil, Trash2, X } from 'lucide-react';
+import { AlertTriangle, Check, Link2, Link2Off, Pencil, Trash2, Users, X } from 'lucide-react';
 
 interface TransactionRowProps {
   row: TransactionRecord;
   categories: CategoryOption[];
   highlighted: boolean;
-  onSetCategory: (id: string, categoryId: string) => Promise<void>;
+  /**
+   * Refile the row. Resolves with the beneficiary the change DROPPED, when it
+   * dropped one — a spend row becoming income loses its consumer, and the row
+   * says so rather than letting a value the user chose disappear unremarked.
+   */
+  onSetCategory: (id: string, categoryId: string) => Promise<Beneficiary | null>;
   onUpdate: (id: string, patch: RowPatch) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   onAccept: (id: string) => Promise<void>;
@@ -30,6 +44,11 @@ interface TransactionRowProps {
   allRows?: TransactionRecord[];
   onLink?: (sourceId: string, targetId: string) => Promise<string | null>;
   onUnlink?: (sourceId: string) => Promise<void>;
+  /**
+   * Say who this was for. Omit to render without the control — the capture
+   * strip books with the default and the correction belongs in the list.
+   */
+  onSetBeneficiary?: (id: string, beneficiary: Beneficiary | null) => Promise<void>;
 }
 
 /**
@@ -55,6 +74,7 @@ export default function TransactionRow({
   allRows,
   onLink,
   onUnlink,
+  onSetBeneficiary,
 }: TransactionRowProps) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -75,6 +95,8 @@ export default function TransactionRow({
   const [draft, setDraft] = useState<RowDraft>(() => toDraft(row));
   const [errors, setErrors] = useState<string[]>([]);
   const [linkOpen, setLinkOpen] = useState(false);
+  const [beneficiaryOpen, setBeneficiaryOpen] = useState(false);
+  const [droppedBeneficiary, setDroppedBeneficiary] = useState<Beneficiary | null>(null);
   const [linkError, setLinkError] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const chipRef = useRef<HTMLButtonElement>(null);
@@ -126,6 +148,22 @@ export default function TransactionRow({
   const occurred = formatOccurred(row);
   const category = row.finance_categories;
   const income = row.direction === 'income';
+
+  /**
+   * Who consumed it — a different fact from whose money it was, which is the
+   * owner of the account it left. Read through `beneficiaryOf` rather than off
+   * the field, so a value left on a row that cannot have one (income, a
+   * transfer, the unaccounted adjustment) never reaches the screen, and so a
+   * missing one always renders as "not recorded" rather than as the household.
+   *
+   * The control is a chip and a row of options rather than the floating list
+   * the category uses. There are five choices and they never grow, and an
+   * inline block cannot be clipped in half by the drill-down modal's scroll
+   * container — which is a bug the category picker had to be rewritten to fix.
+   */
+  const consumable = takesBeneficiary(row);
+  const beneficiary = beneficiaryOf(row);
+  const canSetBeneficiary = Boolean(onSetBeneficiary) && consumable;
 
   // Link state. Everything here is derived from the full row set, so a filter
   // that hides one half of a pair cannot make the other half read as unlinked.
@@ -253,7 +291,7 @@ export default function TransactionRow({
                     type="button"
                     onClick={async () => {
                       setPickerOpen(false);
-                      await onSetCategory(row.id, c.id);
+                      setDroppedBeneficiary(await onSetCategory(row.id, c.id));
                     }}
                     className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left font-mono
                       text-[11px] text-text-muted transition-colors hover:bg-surface2 hover:text-text-primary"
@@ -411,6 +449,28 @@ export default function TransactionRow({
           {row.raw_input}
         </code>
 
+        {consumable && (
+          <button
+            type="button"
+            onClick={() => canSetBeneficiary && setBeneficiaryOpen((o) => !o)}
+            disabled={!canSetBeneficiary}
+            title={
+              beneficiary
+                ? `Consumed by ${BENEFICIARY_LABEL[beneficiary]} — not the same as who paid for it`
+                : 'Nobody recorded who this was for'
+            }
+            className={`flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 font-mono text-[10px]
+              transition-colors ${
+                beneficiary
+                  ? 'text-text-muted hover:text-accent'
+                  : 'italic text-text-muted/50 hover:text-text-muted'
+              } ${canSetBeneficiary ? '' : 'cursor-default'}`}
+          >
+            <Users size={10} className="shrink-0" />
+            {beneficiary ? BENEFICIARY_LABEL[beneficiary] : BENEFICIARY_LABEL[UNRECORDED]}
+          </button>
+        )}
+
         {row.needs_review && (
           <button
             type="button"
@@ -508,6 +568,76 @@ export default function TransactionRow({
           )}
         </div>
       </div>
+
+      {/* Said once, on the row it happened to, and dismissible. Silent is the
+          correct behaviour — for income, a transfer or the adjustment there is
+          no consumer to record — but silent is surprising the first time, and
+          the surprise is what makes it feel like the app overruled the user. */}
+      {droppedBeneficiary && (
+        <div className="mt-1.5 ml-16 flex flex-wrap items-baseline gap-x-2 border-l
+          border-[#F59E0B]/30 pl-2 font-mono text-[10px] leading-relaxed text-text-muted">
+          <span>
+            <span className="text-[#F59E0B]">
+              cleared &ldquo;for {BENEFICIARY_LABEL[droppedBeneficiary]}&rdquo;
+            </span>{' '}
+            — money that arrives, moves between our own drawers, or cannot be
+            accounted for has no consumer to record. Refile it as spending and it
+            can have one again.
+          </span>
+          <button
+            type="button"
+            onClick={() => setDroppedBeneficiary(null)}
+            className="shrink-0 text-text-muted/60 transition-colors hover:text-text-primary"
+          >
+            got it
+          </button>
+        </div>
+      )}
+
+      {beneficiaryOpen && canSetBeneficiary && (
+        <div className="mt-1.5 ml-16 rounded border border-accent/20 bg-surface2/40 p-1.5">
+          <p className="mb-1 font-mono text-[10px] leading-relaxed text-text-muted">
+            Who consumed this? Not who paid for it — that is the account it came
+            out of.
+          </p>
+          <div className="flex flex-wrap gap-1">
+            {BENEFICIARIES.map((b) => (
+              <button
+                key={b}
+                type="button"
+                onClick={async () => {
+                  setBeneficiaryOpen(false);
+                  await onSetBeneficiary!(row.id, b);
+                }}
+                className={`rounded-full border px-2 py-0.5 font-mono text-[10px] transition-colors ${
+                  beneficiary === b
+                    ? 'border-accent/50 bg-accent/10 text-accent'
+                    : 'border-border text-text-muted hover:text-text-primary'
+                }`}
+              >
+                {BENEFICIARY_LABEL[b]}
+              </button>
+            ))}
+            {/* Clearing has to stay reachable. A beneficiary entered by mistake
+                must be removable without inventing a different one, and "not
+                recorded" is a real state rather than the absence of a choice. */}
+            <button
+              type="button"
+              onClick={async () => {
+                setBeneficiaryOpen(false);
+                await onSetBeneficiary!(row.id, null);
+              }}
+              className={`rounded-full border px-2 py-0.5 font-mono text-[10px] italic transition-colors ${
+                beneficiary === null
+                  ? 'border-text-muted/40 bg-surface2 text-text-muted'
+                  : 'border-border text-text-muted/60 hover:text-text-muted'
+              }`}
+            >
+              {BENEFICIARY_LABEL[UNRECORDED]}
+            </button>
+          </div>
+        </div>
+      )}
 
       {confirmDelete && pairDeletion.warning && (
         <p className="mt-1.5 ml-16 border-l border-[#EF4444]/30 pl-2 font-mono text-[10px]

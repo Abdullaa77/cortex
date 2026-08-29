@@ -22,6 +22,8 @@ import {
   OPENING,
   OPENING_COUNTED_AT,
 } from './__fixtures__/corpus.ts';
+import { accountById } from './accounts.ts';
+import { monthTotals, type TransactionRow } from './summarize.ts';
 import { atLocalNoon } from './cutover.ts';
 import { splitAtCutover } from './cutover.ts';
 
@@ -286,5 +288,174 @@ describe('a movement into an account nobody counted', () => {
     const mom = p.find((x) => x.account.id === MOM_UZS_ID)!;
     assert.equal(mom.balance.minor, null);
     assert.equal(mom.uncounted, true);
+  });
+});
+
+describe('retiring an account, rather than deleting one', () => {
+  // The trap this closes: a mistyped account made during the cutover defaults
+  // to active, never gets counted, and shows in the household total as
+  // uncounted from then on. Retiring has to remove it from BOTH lists — a
+  // retired account that kept appearing under "nobody has counted this" would
+  // just be the same nag under a different name.
+  const strays = [
+    ...ACCOUNTS,
+    {
+      id: 'acct-typo',
+      name: 'Mian',
+      owner: 'me' as const,
+      currency: 'UZS' as const,
+      kind: 'cash' as const,
+      is_active: true,
+      sort_order: 9,
+    },
+  ];
+  const retiredStrays = strays.map((a) =>
+    a.id === 'acct-typo' ? { ...a, is_active: false } : a
+  );
+
+  const day = '2026-08-31';
+  const before = positionsAt(strays, CHECKPOINTS, MOVEMENTS, day);
+  const after = positionsAt(retiredStrays, CHECKPOINTS, MOVEMENTS, day);
+
+  test('while active and uncounted it nags, which is the problem', () => {
+    const typo = before.find((p) => p.account.id === 'acct-typo');
+    assert.ok(typo, 'the stray should be a position while it is active');
+    assert.equal(typo.uncounted, true);
+    assert.ok(
+      householdTotal(before, FX_RATE).uncounted.some((p) => p.account.id === 'acct-typo')
+    );
+  });
+
+  test('retired, it leaves the positions list', () => {
+    assert.equal(after.some((p) => p.account.id === 'acct-typo'), false);
+  });
+
+  test('and leaves the uncounted list with it, rather than lingering', () => {
+    assert.equal(
+      householdTotal(after, FX_RATE).uncounted.some((p) => p.account.id === 'acct-typo'),
+      false
+    );
+  });
+
+  test('the household figure is unchanged either way — it never counted', () => {
+    // Uncounted accounts contribute nothing to any total, so retiring one can
+    // only remove a nag. If this moved, something had been folding an unknown
+    // into a sum.
+    assert.equal(
+      householdTotal(after, FX_RATE).totalUzsMinor,
+      householdTotal(before, FX_RATE).totalUzsMinor
+    );
+  });
+
+  test('every other position is untouched', () => {
+    assert.deepEqual(
+      after.map((p) => [p.account.id, p.balance.minor]),
+      before
+        .filter((p) => p.account.id !== 'acct-typo')
+        .map((p) => [p.account.id, p.balance.minor])
+    );
+  });
+});
+
+describe('a retired account keeps its history', () => {
+  const retiredMain = ACCOUNTS.map((a) =>
+    a.id === MAIN_ID ? { ...a, is_active: false } : a
+  );
+
+  test('the rows that pointed at it still point at it', () => {
+    // Retire, never delete. Transactions carry from_account_id / to_account_id
+    // and a delete would take the record of what was spent from the drawer
+    // along with the drawer.
+    const touching = MOVEMENTS.filter(
+      (m) => m.from_account_id === MAIN_ID || m.to_account_id === MAIN_ID
+    );
+    assert.ok(touching.length > 100, `expected the corpus to touch Main, got ${touching.length}`);
+  });
+
+  test('it is still resolvable by id, so the list can name it', () => {
+    assert.equal(accountById(retiredMain, MAIN_ID)?.name, 'Main');
+  });
+
+  test('it simply stops being a position', () => {
+    const day = '2026-08-31';
+    assert.equal(
+      positionsAt(retiredMain, CHECKPOINTS, MOVEMENTS, day).some(
+        (p) => p.account.id === MAIN_ID
+      ),
+      false
+    );
+  });
+});
+
+describe('why retiring the default account cannot be allowed to pass quietly', () => {
+  // `finance_settings.default_account_id` is a plain foreign key. Retiring an
+  // account does not clear it, and useFinanceCapture reads it without asking
+  // whether the account is still active. Left alone, the next capture books
+  // into a retired drawer — and this is what that looks like: the money counts
+  // as spent, and no position moves. Consistent, and false.
+  //
+  // This test is the reason retireAccount moves the default first and refuses
+  // when there is nowhere to move it to.
+  const RETIRED_DEFAULT = 'acct-retired-default';
+  const accounts = [
+    ...ACCOUNTS,
+    {
+      id: RETIRED_DEFAULT,
+      name: 'Retired pot',
+      owner: 'me' as const,
+      currency: 'UZS' as const,
+      kind: 'cash' as const,
+      is_active: false,
+      sort_order: 9,
+    },
+  ];
+
+  const strandedRow: TransactionRow = {
+    id: 'txn-stranded',
+    amount_minor: 50_000 * 100,
+    direction: 'expense',
+    occurred_at: '2026-08-20T10:00:00.000Z',
+    date_precision: 'day',
+    needs_review: false,
+    reimburses_transaction_id: null,
+    finance_categories: {
+      slug: 'groceries',
+      name: 'Groceries',
+      icon: '#',
+      color: '#00FF88',
+      kind: 'expense',
+    },
+  };
+
+  const stranded = {
+    id: 'txn-stranded',
+    amount_minor: 50_000 * 100,
+    occurred_at: '2026-08-20T10:00:00.000Z',
+    from_account_id: RETIRED_DEFAULT,
+    to_account_id: null,
+  };
+
+  test('it counts as spending, like any other row', () => {
+    const august = monthTotals([strandedRow]).find((m) => m.key === '2026-08');
+    assert.equal(august?.spendMinor, 50_000 * 100);
+  });
+
+  test('and moves no position at all, because the drawer is not listed', () => {
+    const day = '2026-08-31';
+    const without = positionsAt(accounts, CHECKPOINTS, MOVEMENTS, day);
+    const withRow = positionsAt(accounts, CHECKPOINTS, [...MOVEMENTS, stranded], day);
+    assert.deepEqual(
+      withRow.map((p) => [p.account.id, p.balance.minor]),
+      without.map((p) => [p.account.id, p.balance.minor])
+    );
+  });
+
+  test('so the household total does not move either', () => {
+    const day = '2026-08-31';
+    assert.equal(
+      householdTotal(positionsAt(accounts, CHECKPOINTS, [...MOVEMENTS, stranded], day), FX_RATE)
+        .totalUzsMinor,
+      householdTotal(positionsAt(accounts, CHECKPOINTS, MOVEMENTS, day), FX_RATE).totalUzsMinor
+    );
   });
 });

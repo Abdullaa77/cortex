@@ -19,7 +19,19 @@
  * stops being used daily, and every number downstream rots.
  */
 
-export type AccountOwner = 'me' | 'mom' | 'sister';
+/**
+ * The people whose money this is. ONE LIST, and everything else derives from
+ * it — `AccountOwner` below, and `Beneficiary` in beneficiary.ts, which is
+ * this list plus 'household'.
+ *
+ * Retyping the three names in a second place is how a fourth person gets added
+ * to one of them and not the other, and then a beneficiary the accounts cannot
+ * express sits in the ledger looking legitimate. Migration 010 does the same
+ * thing in SQL with `is_finance_person()`, for the same reason.
+ */
+export const ACCOUNT_OWNERS = ['me', 'mom', 'sister'] as const;
+
+export type AccountOwner = (typeof ACCOUNT_OWNERS)[number];
 export type AccountCurrency = 'UZS' | 'USD';
 export type AccountKind = 'cash' | 'card' | 'savings';
 
@@ -144,7 +156,16 @@ export const MAX_ACCOUNT_NAME_LENGTH = 40;
  */
 export function validateAccountDraft(
   draft: AccountDraft,
-  existing: AccountRecord[]
+  existing: AccountRecord[],
+  /**
+   * The account being renamed, excluded from the uniqueness check.
+   *
+   * Without it a rename cannot leave a name unchanged, and cannot even fix its
+   * own capitalisation — "Main" -> "main" would collide with itself and report
+   * that an account by that name already exists, naming the very row being
+   * edited. Omitted when creating, where there is no self to exclude.
+   */
+  excludeId?: string
 ): DraftCheck {
   const errors: string[] = [];
   const name = draft.name.trim();
@@ -155,10 +176,45 @@ export function validateAccountDraft(
 
   // Case-insensitive, because "Mom cash" and "mom cash" are the same drawer to
   // a person and two rows to a UNIQUE constraint.
-  if (name && existing.some((a) => a.name.trim().toLowerCase() === name.toLowerCase()))
+  //
+  // Retired accounts are included on purpose: the database's UNIQUE
+  // (user_id, name) does not care whether a row is active, so excluding them
+  // here would turn a caught mistake into a constraint violation from the
+  // server with nothing next to the field.
+  if (
+    name &&
+    existing.some(
+      (a) => a.id !== excludeId && a.name.trim().toLowerCase() === name.toLowerCase()
+    )
+  )
     errors.push(`There is already an account called ${name}.`);
 
   return { ok: errors.length === 0, errors };
+}
+
+/**
+ * Where captures should land once this account is retired.
+ *
+ * Deactivating the account capture writes into is the one deactivation that
+ * can go quietly wrong. `finance_settings.default_account_id` is a plain
+ * foreign key and retiring an account does not clear it, so without this the
+ * next `-10k banana` still books into the retired drawer — and since
+ * `positionsAt` leaves retired accounts out, that money would count in the
+ * month's spending while moving no position at all. Consistent, and false.
+ *
+ * Returns the account that should take over, or null when there is none — in
+ * which case the caller must refuse, because capture with nowhere to land is
+ * worse than an account that stays active.
+ *
+ * The successor is the first remaining active account in ordinary display
+ * order, which is stable and is the same order the cutover screen lists them
+ * in. It is never chosen silently: the caller says which one it moved to.
+ */
+export function nextDefaultAfterRetiring(
+  accounts: AccountRecord[],
+  retiringId: string
+): AccountRecord | null {
+  return activeAccounts(accounts).find((a) => a.id !== retiringId) ?? null;
 }
 
 /** The next sort_order, so a new account lands at the end rather than on top. */

@@ -20,11 +20,17 @@ import { readFileSync, readdirSync } from 'node:fs';
  */
 
 const DIR = new URL('../../../supabase/migrations/', import.meta.url);
+// Written and reviewed, held out of the push path until its condition is met.
+// Read here too: a migration waiting for a date is still a migration, and the
+// invariants below are exactly what should hold before it runs, not after.
+const DEFERRED_DIR = new URL('../../../supabase/deferred/', import.meta.url);
 
-const SQL = readdirSync(DIR)
-  .filter((f) => f.endsWith('.sql'))
-  .sort()
-  .map((f) => ({ file: f, text: readFileSync(new URL(f, DIR), 'utf8') }));
+const read = (dir: URL) =>
+  readdirSync(dir)
+    .filter((f) => f.endsWith('.sql'))
+    .map((f) => ({ file: f, text: readFileSync(new URL(f, dir), 'utf8') }));
+
+const SQL = [...read(DIR), ...read(DEFERRED_DIR)].sort((a, b) => a.file.localeCompare(b.file));
 
 const ALL = SQL.map((s) => s.text).join('\n');
 
@@ -116,18 +122,50 @@ describe('finance_opening_balance is gone, not merely unused', () => {
     assert.equal(LIVE.some((t) => t.name === 'finance_opening_balance'), false);
   });
 
-  test('its figure is migrated into a checkpoint before the drop', () => {
-    const sql = SQL.find((s) => s.file.startsWith('009'))!.text;
-    const insertAt = sql.indexOf('FROM finance_opening_balance');
-    const dropAt = sql.indexOf('DROP TABLE finance_opening_balance');
-    assert.ok(insertAt > 0, 'nothing reads the old table before dropping it');
-    assert.ok(insertAt < dropAt, 'the drop happens before the migration reads it');
+  test('its figure is migrated in 009, and the drop waits for a later file', () => {
+    // The migration and the drop are deliberately not in the same file. 009
+    // reads the table into balance_checkpoints inside a loop over users that
+    // HAVE accounts; a user with an opening balance and no transactions gets
+    // no account from 008, is skipped, and a drop in the same breath would
+    // take the only copy of a hand-entered figure with exit code 0. The window
+    // between the two files is when someone can notice.
+    const migratedIn = SQL.find((s) => s.text.includes('FROM finance_opening_balance'))!;
+    const droppedIn = SQL.find((s) => s.text.includes('DROP TABLE finance_opening_balance'))!;
+    assert.ok(migratedIn, 'nothing reads the old table before dropping it');
+    assert.ok(
+      migratedIn.file < droppedIn.file,
+      `the drop (${droppedIn.file}) must run after the migration (${migratedIn.file})`
+    );
   });
 
-  test("and the accounts' opening columns go with it", () => {
+  test('every drop of it refuses rather than skips', () => {
+    // The failure this guards is not an error, it is the absence of one: a row
+    // that could not be placed is skipped, and a bare DROP then reports
+    // success. Each file that drops the table must first RAISE on a row that
+    // is not present as a checkpoint.
+    for (const { file, text } of SQL) {
+      const dropAt = text.indexOf('DROP TABLE finance_opening_balance');
+      if (dropAt < 0) continue;
+      const before = text.slice(0, dropAt);
+      assert.match(before, /RAISE EXCEPTION/, `${file} drops the table without an assertion`);
+      assert.match(
+        before,
+        /FROM finance_opening_balance o[\s\S]*?balance_checkpoints/,
+        `${file} asserts without comparing against balance_checkpoints`
+      );
+    }
+  });
+
+  test("and the accounts' opening columns go with it, behind the same refusal", () => {
     const sql = SQL.find((s) => s.file.startsWith('009'))!.text;
     assert.match(sql, /DROP COLUMN opening_minor/);
     assert.match(sql, /DROP COLUMN opening_at/);
+
+    // 008 leaves these 0/NULL on every backfilled account, so this asserts
+    // over nothing today. That is when a guard is worth writing, not after.
+    const before = sql.slice(0, sql.indexOf('DROP COLUMN opening_minor'));
+    assert.match(before, /a\.opening_at IS NOT NULL/);
+    assert.match(before, /RAISE EXCEPTION/);
   });
 
   test('nothing in the app still reads either of them', () => {

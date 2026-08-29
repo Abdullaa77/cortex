@@ -48,3 +48,9 @@ next-env.d.ts
 # never committed. The anonymised test fixture lives in src/lib/finance/__fixtures__.
 /finance-notes*.txt
 /import*.sql
+
+# supabase cli
+# `supabase link` writes the project ref and a pooler connection string in
+# here, and the pooler URL carries the database password. Never committed.
+/supabase/.temp
+/supabase/.branches

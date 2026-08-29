@@ -3,13 +3,22 @@
 import Link from 'next/link';
 import { formatAmount, formatBalance, formatMinor } from '@/lib/finance/format';
 import type { AccountPosition, HouseholdTotal } from '@/lib/finance/positions';
-import { Scale, AlertCircle, ArrowRight } from 'lucide-react';
+import { Scale, AlertCircle, ArrowRight, RefreshCw } from 'lucide-react';
 
 interface PositionsCardProps {
   positions: AccountPosition[];
   household: HouseholdTotal;
   /** Days after which a count is old enough to say so. */
   staleAfterDays?: number;
+  /**
+   * Why there are no positions, when the reason is that asking failed.
+   *
+   * Separate from `positions` being empty on purpose. An empty array is the
+   * answer "there are none"; it is not, and must never be, the way "the
+   * question could not be asked" arrives here.
+   */
+  error?: string | null;
+  onRetry?: () => void;
   onCount: (accountId: string) => void;
   onSetRate: () => void;
 }
@@ -27,19 +36,57 @@ const OWNER_LABEL: Record<string, string> = {
  * inversion this stage is: positions are primary and transactions explain the
  * changes between them.
  *
- * Two rules the copy has to keep. An uncounted account says "not counted", not
- * zero — the total below it is then honestly incomplete rather than quietly
- * wrong. And the household figure always states the rate it converted at, with
- * the date that rate was set, because a household total that does not name its
- * rate is not a figure.
+ * Three rules the copy has to keep. An uncounted account says "not counted",
+ * not zero — the total below it is then honestly incomplete rather than
+ * quietly wrong. The household figure always states the rate it converted at,
+ * with the date that rate was set, because a household total that does not
+ * name its rate is not a figure.
+ *
+ * And a failed load says so. "No accounts yet" when the truth is "could not
+ * ask" is a false statement dressed as a fact: it invites setting up accounts
+ * that already exist, and it hid an unapplied migration behind a friendly
+ * empty state for long enough to look like a setup problem instead of a broken
+ * database. Failure and emptiness are different screens.
  */
 export default function PositionsCard({
   positions,
   household,
   staleAfterDays = 14,
+  error = null,
+  onRetry,
   onCount,
   onSetRate,
 }: PositionsCardProps) {
+  // Checked first, and it takes precedence over the empty state: when the
+  // query failed, `positions` is empty for a reason that has nothing to do
+  // with how many accounts exist.
+  if (error)
+    return (
+      <div className="rounded-lg border border-[#EF4444]/30 bg-[#EF4444]/[0.04] px-3 py-3">
+        <p className="flex items-center gap-1.5 font-mono text-[11px] text-[#EF4444]">
+          <AlertCircle size={12} className="shrink-0" />
+          Could not load accounts.
+        </p>
+        <p className="mt-1 font-mono text-[11px] leading-relaxed text-text-muted">
+          This is not the same as having none — the balances below are unknown,
+          not zero.
+        </p>
+        <p className="mt-1.5 break-words font-mono text-[10px] leading-relaxed text-text-muted/70">
+          {error}
+        </p>
+        {onRetry && (
+          <button
+            type="button"
+            onClick={onRetry}
+            className="mt-2 inline-flex items-center gap-1.5 font-mono text-xs text-accent
+              transition-colors hover:text-accent-dim"
+          >
+            <RefreshCw size={12} /> Try again
+          </button>
+        )}
+      </div>
+    );
+
   if (positions.length === 0)
     return (
       <div className="rounded-lg border border-accent/20 bg-accent/[0.03] px-3 py-3">

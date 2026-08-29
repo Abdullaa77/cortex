@@ -7,10 +7,12 @@
   },
   "scripts": {
     "dev": "next dev",
+    "prebuild": "node scripts/check-migrations.mjs",
     "build": "next build",
+    "check:migrations": "node scripts/check-migrations.mjs",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test \"src/**/*.test.ts\""
+    "test": "node scripts/run-tests.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.9.0",
@@ -28,6 +30,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.3.3",
     "sharp": "^0.34.5",
+    "supabase": "^2.116.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

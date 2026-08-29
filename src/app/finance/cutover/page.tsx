@@ -6,9 +6,23 @@ import AppShell from '@/components/layout/AppShell';
 import LoadingState from '@/components/ui/LoadingState';
 import { useFinanceSummary } from '@/hooks/useFinanceSummary';
 import { formatAmount, formatMinor } from '@/lib/finance/format';
-import { validateAccountDraft, type AccountDraft, type AccountRecord } from '@/lib/finance/accounts';
+import {
+  activeAccounts,
+  validateAccountDraft,
+  type AccountDraft,
+  type AccountRecord,
+} from '@/lib/finance/accounts';
 import { today } from '@/lib/finance/positions';
-import { Check, Plus, ArrowRight, ArrowLeft } from 'lucide-react';
+import {
+  Check,
+  Plus,
+  ArrowRight,
+  ArrowLeft,
+  AlertCircle,
+  RefreshCw,
+  Archive,
+  Undo2,
+} from 'lucide-react';
 
 /**
  * The cutover: one sitting, not three.
@@ -55,6 +69,40 @@ export default function CutoverPage() {
       </AppShell>
     );
 
+  // Same rule PositionsCard keeps: a load that failed is not a household with
+  // no accounts. Walking someone through a cutover on top of a broken read
+  // would have them create accounts that already exist, and count drawers that
+  // already have checkpoints.
+  if (store.error)
+    return (
+      <AppShell>
+        <div className="mx-auto max-w-2xl p-4 pb-8 lg:px-10 lg:py-6 page-enter">
+          <Header />
+          <div className="rounded-lg border border-[#EF4444]/30 bg-[#EF4444]/[0.04] px-3 py-3">
+            <p className="flex items-center gap-1.5 font-mono text-[11px] text-[#EF4444]">
+              <AlertCircle size={12} className="shrink-0" />
+              Could not load the accounts.
+            </p>
+            <p className="mt-1 font-mono text-[11px] leading-relaxed text-text-muted">
+              The cutover cannot start without knowing which accounts already
+              exist — an empty list here would be a guess, not an answer.
+            </p>
+            <p className="mt-1.5 break-words font-mono text-[10px] leading-relaxed text-text-muted/70">
+              {store.error}
+            </p>
+            <button
+              type="button"
+              onClick={store.refetch}
+              className="mt-2 inline-flex items-center gap-1.5 font-mono text-xs text-accent
+                transition-colors hover:text-accent-dim"
+            >
+              <RefreshCw size={12} /> Try again
+            </button>
+          </div>
+        </div>
+      </AppShell>
+    );
+
   const active = store.activeAccounts;
   const allCounted = active.length > 0 && active.every((a) => counted.has(a.id));
 
@@ -84,8 +132,15 @@ export default function CutoverPage() {
 
         {step === 1 && (
           <AddAccounts
-            accounts={active}
+            // All of them, not just the active ones: a row retired by mistake
+            // has to be visible to be brought back, and the uniqueness check
+            // has to see retired names because the database's UNIQUE does.
+            accounts={store.accounts}
+            defaultAccountId={store.settings.defaultAccountId}
             onCreate={store.createAccount}
+            onRename={store.renameAccount}
+            onRetire={store.retireAccount}
+            onRestore={(id) => store.updateAccount(id, { is_active: true })}
             onBack={() => setStep(0)}
             onNext={() => setStep(2)}
           />
@@ -217,12 +272,22 @@ const CURRENCIES: AccountDraft['currency'][] = ['UZS', 'USD'];
 
 function AddAccounts({
   accounts,
+  defaultAccountId,
   onCreate,
+  onRename,
+  onRetire,
+  onRestore,
   onBack,
   onNext,
 }: {
   accounts: AccountRecord[];
+  defaultAccountId: string | null;
   onCreate: (draft: AccountDraft) => Promise<string | null>;
+  onRename: (id: string, name: string) => Promise<string | null>;
+  onRetire: (
+    id: string
+  ) => Promise<{ error: string | null; defaultMovedTo: AccountRecord | null }>;
+  onRestore: (id: string) => Promise<string | null>;
   onBack: () => void;
   onNext: () => void;
 }) {
@@ -234,8 +299,12 @@ function AddAccounts({
   });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  /** Said out loud when retiring moves where captures land. Never silent. */
+  const [notice, setNotice] = useState<string | null>(null);
 
   const check = validateAccountDraft(draft, accounts);
+  const active = activeAccounts(accounts);
+  const retired = accounts.filter((a) => !a.is_active);
 
   const add = async () => {
     setBusy(true);
@@ -258,15 +327,26 @@ function AddAccounts({
 
       {accounts.length > 0 && (
         <div className="rounded-lg border border-border/60 bg-surface/30 divide-y divide-border/20">
-          {accounts.map((a) => (
-            <div key={a.id} className="flex items-baseline gap-2 px-3 py-1.5 font-mono text-xs">
-              <span className="text-text-primary">{a.name}</span>
-              <span className="text-[10px] text-text-muted/60">
-                {a.owner} · {a.currency} · {a.kind}
-              </span>
-            </div>
+          {[...active, ...retired].map((a) => (
+            <AccountRow
+              key={a.id}
+              account={a}
+              isDefault={a.id === defaultAccountId}
+              onRename={(name) => onRename(a.id, name)}
+              onRetire={async () => {
+                const result = await onRetire(a.id);
+                if (!result.error && result.defaultMovedTo)
+                  setNotice(`Captures now land in ${result.defaultMovedTo.name}.`);
+                return result.error;
+              }}
+              onRestore={() => onRestore(a.id)}
+            />
           ))}
         </div>
+      )}
+
+      {notice && (
+        <p className="font-mono text-[11px] leading-relaxed text-[#F59E0B]">{notice}</p>
       )}
 
       <div className="rounded-lg border border-accent/20 bg-accent/[0.03] px-3 py-2.5">
@@ -328,7 +408,7 @@ function AddAccounts({
         <button
           type="button"
           onClick={onNext}
-          disabled={accounts.length === 0}
+          disabled={active.length === 0}
           className="ml-auto inline-flex items-center gap-1.5 rounded border border-accent/40
             bg-accent/10 px-2.5 py-1 font-mono text-xs text-accent transition-colors
             hover:bg-accent/20 disabled:opacity-40"
@@ -336,6 +416,126 @@ function AddAccounts({
           count them <ArrowRight size={11} />
         </button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * One existing account, editable in place.
+ *
+ * Editable here rather than on a settings screen somewhere, because this is
+ * the screen where six accounts get made in one sitting at speed, and a
+ * mistyped name currently has no undo: it defaults to active, never gets
+ * counted, and shows in the household total as uncounted from then on. The
+ * repair belongs next to the mistake.
+ *
+ * Retire, never delete. Transactions point at accounts; deleting a drawer
+ * would take the record of what was spent from it. A retired account keeps
+ * every row and only stops claiming to hold something.
+ */
+function AccountRow({
+  account,
+  isDefault,
+  onRename,
+  onRetire,
+  onRestore,
+}: {
+  account: AccountRecord;
+  isDefault: boolean;
+  onRename: (name: string) => Promise<string | null>;
+  onRetire: () => Promise<string | null>;
+  onRestore: () => Promise<string | null>;
+}) {
+  const [name, setName] = useState(account.name);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  // Follow the record when it changes underneath — a rejected rename rolls the
+  // optimistic update back, and the field has to roll back with it rather than
+  // sitting there showing a name the account does not have.
+  const [seen, setSeen] = useState(account.name);
+  if (seen !== account.name) {
+    setSeen(account.name);
+    setName(account.name);
+  }
+
+  const commit = async () => {
+    if (name === account.name) return setError(null);
+    setBusy(true);
+    const err = await onRename(name);
+    setBusy(false);
+    setError(err);
+  };
+
+  const act = async (fn: () => Promise<string | null>) => {
+    setBusy(true);
+    setError(await fn());
+    setBusy(false);
+  };
+
+  return (
+    <div className="px-3 py-1.5">
+      <div className="flex flex-wrap items-center gap-2">
+        {account.is_active ? (
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onBlur={commit}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') e.currentTarget.blur();
+              if (e.key === 'Escape') {
+                setName(account.name);
+                setError(null);
+              }
+            }}
+            aria-label={`Rename ${account.name}`}
+            className="w-44 rounded border border-transparent bg-transparent px-1 py-0.5 font-mono
+              text-xs text-text-primary hover:border-border focus:border-accent/40
+              focus:bg-surface2 focus:outline-none"
+          />
+        ) : (
+          <span className="w-44 truncate px-1 py-0.5 font-mono text-xs text-text-muted/50 line-through">
+            {account.name}
+          </span>
+        )}
+
+        <span className="font-mono text-[10px] text-text-muted/60">
+          {account.owner} · {account.currency} · {account.kind}
+        </span>
+
+        {isDefault && account.is_active && (
+          <span
+            title="New captures land here"
+            className="rounded border border-accent/30 px-1 font-mono text-[10px] text-accent"
+          >
+            default
+          </span>
+        )}
+
+        {account.is_active ? (
+          <button
+            type="button"
+            onClick={() => act(onRetire)}
+            disabled={busy}
+            title="Keep its history, stop it holding anything"
+            className="ml-auto inline-flex items-center gap-1 font-mono text-[10px] text-text-muted
+              transition-colors hover:text-[#F59E0B] disabled:opacity-40"
+          >
+            <Archive size={10} /> retire
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => act(onRestore)}
+            disabled={busy}
+            className="ml-auto inline-flex items-center gap-1 font-mono text-[10px] text-text-muted
+              transition-colors hover:text-accent disabled:opacity-40"
+          >
+            <Undo2 size={10} /> restore
+          </button>
+        )}
+      </div>
+      {error && <p className="mt-0.5 font-mono text-[10px] text-[#EF4444]">{error}</p>}
     </div>
   );
 }

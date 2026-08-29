@@ -18,6 +18,8 @@ import { sidesForClass, type AccountRecord } from '../accounts.ts';
 import type { BalanceCheckpoint, MovementRow } from '../checkpoints.ts';
 import type { FxRate } from '../positions.ts';
 import type { PairableRow } from '../transfers.ts';
+import type { Beneficiary, BeneficiaryRow } from '../beneficiary.ts';
+import { atLocalNoon } from '../cutover.ts';
 
 export const NOTES = readFileSync(
   new URL('./notes.sample.txt', import.meta.url),
@@ -67,6 +69,10 @@ export const CORPUS_RECORDS: TransactionRecord[] = IMPORTED.rows.map((r, i) => {
     date_precision: r.datePrecision,
     reimburses_transaction_id: null,
     transfer_pair_id: null,
+    // Stage 3. Every imported row is 'not recorded' and stays that way: they
+    // were reconstructed from two months of notes, and nobody knows who ate
+    // the July groceries. See BENEFICIARY_CORPUS below.
+    beneficiary: null,
     // Every imported row touches the one seeded 'Main' account, on the side
     // the money actually moved — decided by what the row COUNTS AS, not by its
     // `direction`. The two disagree on "4,625,000 salary (July)", and reading
@@ -210,3 +216,127 @@ export const PAIRABLE_ROWS: PairableRow[] = CORPUS_RECORDS.map((r) => ({
   transfer_pair_id: null,
   finance_categories: r.finance_categories,
 }));
+
+// ============================================
+// Stage 3 — who consumed it
+// ============================================
+// The 153 imported rows carry no beneficiary and never will. They were read
+// back out of notes; no day was written down for them and, for the same
+// reason, no consumer was. Writing 'household' across them would assert
+// something no human ever checked, and would then be indistinguishable from
+// the rows where Scott really did choose household.
+//
+// So the split has to be shown with rows that came from the other side of the
+// line: captures made in the app, after a cutover, where a person was present
+// and the default was one they could see and change.
+
+/**
+ * The line. Mid-August, so one month holds both kinds of row — the imported
+ * ones that predate all of this and the captures that came after it. A cutover
+ * on a month boundary would put the two in separate months and the interesting
+ * case, a floor with a household part AND a personal part AND an unrecorded
+ * part, would never appear.
+ */
+export const CUTOVER_DATE = '2026-08-15';
+
+interface CaptureSeed {
+  day: string;
+  minor: number;
+  comment: string;
+  slug: string;
+  beneficiary: Beneficiary | null;
+}
+
+/**
+ * What capture writes after Stage 3 lands.
+ *
+ * Every one of these defaults to 'household' at write time; the three that name
+ * a person are rows Scott went back and corrected, which is the only way a
+ * beneficiary other than the default ever gets set — there is deliberately no
+ * sigil for it in the capture grammar.
+ *
+ * Chosen so the floor has all three parts. A fixture where personal spend
+ * happened to be zero would let a view that silently folded people into the
+ * household pass every assertion in the suite.
+ */
+const CAPTURE_SEEDS: CaptureSeed[] = [
+  { day: '2026-08-16', minor: 87_400_00, comment: 'korzinka', slug: 'groceries', beneficiary: 'household' },
+  { day: '2026-08-18', minor: 12_000_00, comment: 'metro', slug: 'transport', beneficiary: 'household' },
+  { day: '2026-08-19', minor: 64_500_00, comment: 'lunch with PersonA', slug: 'eating-out', beneficiary: 'me' },
+  { day: '2026-08-21', minor: 210_000_00, comment: 'bozor', slug: 'groceries', beneficiary: 'household' },
+  { day: '2026-08-22', minor: 45_000_00, comment: 'taxi to clinic', slug: 'transport', beneficiary: 'mom' },
+  { day: '2026-08-24', minor: 38_000_00, comment: 'coffee', slug: 'eating-out', beneficiary: 'sister' },
+  { day: '2026-08-25', minor: 320_000_00, comment: 'winter coat', slug: 'clothing', beneficiary: 'sister' },
+  { day: '2026-08-26', minor: 150_000_00, comment: 'internet', slug: 'phone-internet', beneficiary: 'household' },
+];
+
+const captureCategory = (slug: string) => {
+  const cat = CATEGORY_BY_SLUG.get(slug)!;
+  return { slug: cat.slug, name: cat.name, icon: cat.icon, color: cat.color, kind: cat.kind };
+};
+
+/** The captures in the shape `summarize` and the beneficiary views read. */
+export const CAPTURE_ROWS: BeneficiaryRow[] = CAPTURE_SEEDS.map((seed, i) => ({
+  id: `capture-${i}`,
+  reimburses_transaction_id: null,
+  amount_minor: seed.minor,
+  direction: 'expense',
+  occurred_at: atLocalNoon(seed.day),
+  date_precision: 'day',
+  needs_review: false,
+  beneficiary: seed.beneficiary,
+  finance_categories: captureCategory(seed.slug),
+}));
+
+/**
+ * Two rows that must never carry a beneficiary, whatever anyone writes to them.
+ *
+ * Money arriving has not been consumed by anyone yet, and a gap nobody can
+ * explain has no known consumer. Both are given a beneficiary here ON PURPOSE,
+ * so the tests are checking that the read path refuses it rather than checking
+ * that the fixture happened not to set one.
+ */
+export const UNDEFINED_BENEFICIARY_ROWS: BeneficiaryRow[] = [
+  {
+    id: 'capture-income',
+    reimburses_transaction_id: null,
+    amount_minor: 4_000_000_00,
+    direction: 'income',
+    occurred_at: atLocalNoon('2026-08-20'),
+    date_precision: 'day',
+    needs_review: false,
+    beneficiary: 'household',
+    finance_categories: captureCategory('income'),
+  },
+  {
+    id: 'capture-adjustment',
+    reimburses_transaction_id: null,
+    amount_minor: 250_000_00,
+    direction: 'expense',
+    occurred_at: atLocalNoon('2026-08-27'),
+    date_precision: 'day',
+    needs_review: false,
+    beneficiary: 'mom',
+    finance_categories: {
+      slug: 'unaccounted',
+      name: 'Unaccounted',
+      icon: '\u2260',
+      color: '#EF4444',
+      kind: 'expense',
+    },
+  },
+];
+
+/**
+ * The whole ledger as Stage 3 leaves it: the 153 unrecorded historical rows,
+ * plus the captures that came after the cutover.
+ *
+ * Kept separate from CORPUS_ROWS rather than merged into it. Every Stage 1 and
+ * Stage 2 figure is derived from the 153 alone and must stay byte-identical;
+ * adding rows to that array would move all of them at once.
+ */
+export const BENEFICIARY_CORPUS: BeneficiaryRow[] = [
+  ...CORPUS_ROWS,
+  ...CAPTURE_ROWS,
+  ...UNDEFINED_BENEFICIARY_ROWS,
+];

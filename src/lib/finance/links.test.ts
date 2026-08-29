@@ -48,6 +48,7 @@ function record(over: Partial<TransactionRecord> & { id: string }): TransactionR
     raw_input: '',
     category_id: null,
     category_source: 'inferred',
+    beneficiary: null,
     needs_review: false,
     parse_flags: [],
     occurred_at: JULY,
