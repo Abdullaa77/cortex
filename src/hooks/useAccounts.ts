@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSupabase } from '@/components/providers/SupabaseProvider';
 import {
   activeAccounts,
+  nextDefaultAfterRetiring,
   nextSortOrder,
   validateAccountDraft,
   type AccountDraft,
@@ -199,6 +200,86 @@ export function useAccounts() {
   );
 
   /**
+   * Rename in place.
+   *
+   * Goes through the same check the add row does, with the same sentences, so
+   * a duplicate name is refused identically whether it is typed into a new
+   * account or into an existing one — and self-excluded, so an account can
+   * keep its own name and fix its own capitalisation.
+   */
+  const renameAccount = useCallback(
+    async (id: string, name: string): Promise<string | null> => {
+      const account = accounts.find((a) => a.id === id);
+      if (!account) return 'That account is gone.';
+
+      const check = validateAccountDraft({ ...account, name }, accounts, id);
+      if (!check.ok) return check.errors[0];
+
+      const trimmed = name.trim();
+      if (trimmed === account.name) return null;
+      return updateAccount(id, { name: trimmed });
+    },
+    [accounts, updateAccount]
+  );
+
+  /**
+   * Retire an account. Never delete one.
+   *
+   * Transactions point at accounts, and a delete would take the record of what
+   * was spent from a drawer along with the drawer. Retiring keeps every row
+   * exactly where it is and only stops the account claiming to hold something:
+   * `positionsAt` lists active accounts, so a retired one leaves the positions
+   * list and the uncounted list together, and stops dragging on a household
+   * total it can no longer be counted for.
+   *
+   * Two refusals and one consequence, in that order:
+   *
+   *   - The last active account cannot be retired. Capture would have nowhere
+   *     to land, and a capture that books into no account is a row that moves
+   *     no position — the number on /finance and the money in the drawer would
+   *     part company on the next thing typed.
+   *
+   *   - If this is where captures land, the default moves FIRST, then the
+   *     account is retired. That order is the whole point: if the retire then
+   *     fails, the default has merely moved to another live account, which is
+   *     harmless. The other order can leave capture pointing at a retired
+   *     drawer, which is the state this exists to prevent.
+   *
+   * Returns which account took over, so the screen can say so. The default is
+   * never re-pointed without telling anyone — that is the same rule
+   * `createAccount` keeps when it declines to move the default to whatever was
+   * made most recently.
+   */
+  const retireAccount = useCallback(
+    async (
+      id: string
+    ): Promise<{ error: string | null; defaultMovedTo: AccountRecord | null }> => {
+      const account = accounts.find((a) => a.id === id);
+      if (!account) return { error: 'That account is gone.', defaultMovedTo: null };
+      if (!account.is_active) return { error: null, defaultMovedTo: null };
+
+      const successor = nextDefaultAfterRetiring(accounts, id);
+      if (!successor)
+        return {
+          error:
+            'This is the only account left. Add another before retiring it — captures have to land somewhere.',
+          defaultMovedTo: null,
+        };
+
+      let movedTo: AccountRecord | null = null;
+      if (settings.defaultAccountId === id) {
+        const err = await saveSettings({ defaultAccountId: successor.id });
+        if (err) return { error: err, defaultMovedTo: null };
+        movedTo = successor;
+      }
+
+      const err = await updateAccount(id, { is_active: false });
+      return { error: err, defaultMovedTo: err ? null : movedTo };
+    },
+    [accounts, settings.defaultAccountId, saveSettings, updateAccount]
+  );
+
+  /**
    * Record a physical count.
    *
    * Two writes, in the order that fails safely. The adjustment goes first, so
@@ -362,6 +443,8 @@ export function useAccounts() {
     refetch: fetchAll,
     createAccount,
     updateAccount,
+    renameAccount,
+    retireAccount,
     saveSettings,
     recordCount,
     deleteCheckpoint,

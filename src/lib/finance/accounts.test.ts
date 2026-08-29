@@ -7,6 +7,7 @@ import {
   MAIN_ACCOUNT_NAME,
   sidesForClass,
   validateAccountDraft,
+  nextDefaultAfterRetiring,
   nextSortOrder,
   type AccountRecord,
 } from './accounts.ts';
@@ -209,5 +210,88 @@ describe('naming an account', () => {
   test('a new account lands at the end rather than on top', () => {
     assert.equal(nextSortOrder(existing), 1);
     assert.equal(nextSortOrder([]), 0);
+  });
+});
+
+describe('renaming an account in place', () => {
+  // Same function as the add row, with the row being edited excluded — so the
+  // sentences a rename is refused with are the sentences the add row uses,
+  // rather than a second wording of the same rule that can drift from it.
+  const main = account({ id: '1', name: 'Main' });
+  const mom = account({ id: '2', name: "Mom — cash", owner: 'mom' });
+  const retired = account({ id: '3', name: 'Old wallet', is_active: false });
+  const existing = [main, mom, retired];
+
+  const rename = (id: string, name: string) =>
+    validateAccountDraft({ ...account({ id, name }) }, existing, id);
+
+  test('an account may keep its own name', () => {
+    // Without self-exclusion this reports that an account called Main already
+    // exists, naming the very row being edited.
+    assert.equal(rename('1', 'Main').ok, true);
+  });
+
+  test('and may fix its own capitalisation', () => {
+    assert.equal(rename('1', 'main').ok, true);
+    assert.equal(rename('1', 'MAIN').ok, true);
+  });
+
+  test('renaming onto another account is refused, in the add row\'s words', () => {
+    for (const name of ["Mom — cash", "mom — cash", "  MOM — CASH  "]) {
+      const { ok, errors } = rename('1', name);
+      assert.equal(ok, false, name);
+      assert.equal(errors[0], `There is already an account called ${name.trim()}.`);
+    }
+  });
+
+  test('renaming to empty is refused, in the add row\'s words', () => {
+    for (const name of ['', '   ']) {
+      const { ok, errors } = rename('1', name);
+      assert.equal(ok, false, JSON.stringify(name));
+      assert.equal(errors[0], 'Give it a name — you will be counting it by that name.');
+    }
+  });
+
+  test('a retired account still holds its name', () => {
+    // UNIQUE (user_id, name) does not care whether a row is active. Excluding
+    // retired names here would turn a caught mistake into a constraint
+    // violation from the server with nothing next to the field.
+    assert.equal(rename('1', 'Old wallet').ok, false);
+  });
+
+  test('the refusal wording matches creating, exactly', () => {
+    const onCreate = validateAccountDraft(
+      { name: 'Main', owner: 'me', currency: 'UZS', kind: 'cash' },
+      existing
+    );
+    const onRename = rename('2', 'Main');
+    assert.deepEqual(onRename.errors, onCreate.errors);
+  });
+});
+
+describe('where captures land when an account is retired', () => {
+  const main = account({ id: '1', name: 'Main', sort_order: 0 });
+  const mom = account({ id: '2', name: "Mom — cash", owner: 'mom', sort_order: 1 });
+  const retired = account({ id: '3', name: 'Old wallet', is_active: false, sort_order: 2 });
+
+  test('the next active account in display order takes over', () => {
+    assert.equal(nextDefaultAfterRetiring([main, mom, retired], '1')?.id, '2');
+  });
+
+  test('a retired account is never made the successor', () => {
+    // It would be the same bug one step later: capture pointing at a drawer
+    // that positionsAt does not list, so the money counts as spent and moves
+    // no position.
+    assert.equal(nextDefaultAfterRetiring([main, retired], '1'), null);
+  });
+
+  test('the last active account has no successor, so retiring it must be refused', () => {
+    assert.equal(nextDefaultAfterRetiring([main], '1'), null);
+    assert.equal(nextDefaultAfterRetiring([main, retired], '1'), null);
+  });
+
+  test('display order decides, not creation order', () => {
+    const later = account({ id: '4', name: 'Aaa', sort_order: 0 });
+    assert.equal(nextDefaultAfterRetiring([main, mom, later], '1')?.id, '4');
   });
 });

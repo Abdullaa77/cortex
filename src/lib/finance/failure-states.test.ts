@@ -79,3 +79,37 @@ describe('the hook cannot report success for a query it never got', () => {
     assert.match(cat, /setError\(/);
   });
 });
+
+describe('retiring an account cannot strand where captures land', () => {
+  const retire = HOOK.slice(HOOK.indexOf('const retireAccount'), HOOK.indexOf('const recordCount'));
+
+  test('it retires rather than deletes', () => {
+    // Transactions point at accounts. A delete would take the record of what
+    // was spent from a drawer along with the drawer.
+    assert.match(retire, /is_active: false/);
+    assert.equal(/\.delete\(\)/.test(retire), false, 'retiring must never delete the row');
+  });
+
+  test('the last active account is refused', () => {
+    assert.match(retire, /nextDefaultAfterRetiring/);
+    assert.match(retire, /only account left/i);
+  });
+
+  test('the default moves BEFORE the account is retired', () => {
+    // Order is the whole guard. Retire-then-move leaves a window where capture
+    // points at a retired drawer; move-then-retire fails into a default that
+    // merely sits on another live account, which is harmless.
+    const movesDefault = retire.indexOf('saveSettings({ defaultAccountId');
+    const retires = retire.indexOf("is_active: false");
+    assert.ok(movesDefault > 0, 'the default is never re-pointed');
+    assert.ok(
+      movesDefault < retires,
+      'the account is retired before the default moves off it'
+    );
+  });
+
+  test('and it says where captures went, rather than moving them silently', () => {
+    assert.match(retire, /defaultMovedTo/);
+    assert.match(CUTOVER, /Captures now land in \$\{result\.defaultMovedTo\.name\}/);
+  });
+});
