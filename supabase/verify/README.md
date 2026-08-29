@@ -44,6 +44,8 @@ cat supabase/migrations/008_accounts.sql \
 The SQL editor runs that as one transaction, so a `RAISE` anywhere in it rolls
 the whole thing back.
 
-**011 is not in that list, deliberately.** It drops
-`finance_opening_balance` and waits until the cutover has put a real
-checkpoint on every real account. Its header says why.
+**011 is not in that list, and not in `migrations/` either.** It lives in
+`supabase/deferred/`, because `supabase db push` reads the directory and not
+the comments — a file sitting in `migrations/` gets applied by the next push
+whatever it says about waiting. To run it, move it into `migrations/` and
+push. That is a deliberate act and it shows up in a diff.

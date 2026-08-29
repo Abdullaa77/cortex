@@ -27,7 +27,6 @@
  *
  *   -- @sentinel: table accounts
  *   -- @sentinel: column transactions.beneficiary
- *   -- @sentinel: deferred <why, and when it should run>
  *   -- @sentinel: unprobeable <why>
  *
  * A migration with no marker is an error. That is deliberate: the check is
@@ -37,7 +36,28 @@
  * Objects that a LATER migration drops are handled automatically — the
  * expectation flips from present to absent — so retiring a table does not
  * require anyone to remember to edit the marker of the migration that created
- * it. A `deferred` migration does not flip anything, because it has not run.
+ * it.
+ *
+ * ---------------------------------------------------------------------------
+ * A MIGRATION THAT IS NOT MEANT TO HAVE RUN YET LIVES SOMEWHERE ELSE
+ *
+ * There used to be a `-- @sentinel: deferred` marker, which told this check to
+ * look away from a file in `migrations/`. It was wrong on its first day. Two
+ * reasons, and the second is the serious one:
+ *
+ *   1. A check with a documented way to be silenced is a check that will be
+ *      silenced. The failure it exists to catch looks exactly like a file
+ *      someone marked deferred and forgot.
+ *
+ *   2. `supabase db push` does not read markers. Anything sitting in
+ *      `migrations/` gets applied by the next push, whatever a comment says
+ *      about waiting — which for 011 means dropping a table on a day nobody
+ *      chose. Holding it out of that directory is the only thing that
+ *      actually prevents it.
+ *
+ * So deferred migrations live in `supabase/deferred/`, out of the push path
+ * entirely, and this reports them every run so they cannot be forgotten. To
+ * apply one, move it into `migrations/` — a deliberate act, visible in a diff.
  *
  * ---------------------------------------------------------------------------
  * WHEN THE CONFIG IS MISSING, THIS FAILS
@@ -52,7 +72,10 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
-const DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'supabase', 'migrations');
+const SUPABASE = join(dirname(fileURLToPath(import.meta.url)), '..', 'supabase');
+const DIR = join(SUPABASE, 'migrations');
+/** Written, reviewed, and deliberately not in the push path yet. */
+const DEFERRED_DIR = join(SUPABASE, 'deferred');
 
 const RED = (s) => `\x1b[31m${s}\x1b[0m`;
 const GREEN = (s) => `\x1b[32m${s}\x1b[0m`;
@@ -64,7 +87,7 @@ function loadEnv() {
   // and node does not.
   for (const file of ['.env.local', '.env']) {
     try {
-      const text = readFileSync(join(DIR, '..', '..', file), 'utf8');
+      const text = readFileSync(join(SUPABASE, '..', file), 'utf8');
       for (const line of text.split('\n')) {
         const m = /^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/.exec(line);
         if (m && !process.env[m[1]]) process.env[m[1]] = m[2].replace(/^["']|["']$/g, '');
@@ -73,6 +96,25 @@ function loadEnv() {
       /* absent is normal */
     }
   }
+}
+
+/**
+ * Migrations held out of the push path. Reported every run: a file that is
+ * waiting for a date is easy to forget, and the whole point of moving it here
+ * was to make forgetting it visible rather than silent.
+ */
+function deferred() {
+  let files;
+  try {
+    files = readdirSync(DEFERRED_DIR).filter((f) => f.endsWith('.sql')).sort();
+  } catch {
+    return [];
+  }
+  return files.map((file) => {
+    const text = readFileSync(join(DEFERRED_DIR, file), 'utf8');
+    const m = /--\s*@deferred-until:\s*(.*)/.exec(text);
+    return { file, until: m ? m[1].trim() : null };
+  });
 }
 
 /** Every migration, in the order they are meant to run. */
@@ -92,8 +134,7 @@ function parseSentinel(text) {
     const [table, column] = rest.trim().split('.');
     return { kind, table, column, label: `column ${table}.${column}` };
   }
-  if (kind === 'deferred' || kind === 'unprobeable')
-    return { kind, note: rest.trim(), label: kind };
+  if (kind === 'unprobeable') return { kind, note: rest.trim(), label: kind };
   return null;
 }
 
@@ -103,8 +144,7 @@ function parseSentinel(text) {
  */
 function droppedBy(all) {
   const dropped = new Map(); // "table x" | "column t.c" -> file
-  for (const { file, text, sentinel } of all) {
-    if (sentinel?.kind === 'deferred') continue;
+  for (const { file, text } of all) {
     for (const m of text.matchAll(/DROP TABLE (?:IF EXISTS )?(\w+)/g))
       dropped.set(`table ${m[1]}`, file);
     for (const m of text.matchAll(/ALTER TABLE (\w+)([\s\S]*?);/g)) {
@@ -171,7 +211,6 @@ async function main() {
       '\n  Add one line near the top of each:\n' +
         '    -- @sentinel: table <name>            an object the migration creates\n' +
         '    -- @sentinel: column <table>.<name>\n' +
-        '    -- @sentinel: deferred <why>          not meant to have run yet\n' +
         '    -- @sentinel: unprobeable <why>       nothing safe to probe over REST'
     );
     return 1;
@@ -183,7 +222,7 @@ async function main() {
   const notes = [];
 
   for (const { file, sentinel } of all) {
-    if (sentinel.kind === 'deferred' || sentinel.kind === 'unprobeable') {
+    if (sentinel.kind === 'unprobeable') {
       notes.push({ file, sentinel });
       continue;
     }
@@ -237,7 +276,28 @@ async function main() {
     return 1;
   }
 
+  const parked = deferred();
+  for (const d of parked)
+    console.log(
+      `  ${YELLOW('||')}  ${d.file}  ${DIM(`held in supabase/deferred/ — ${d.until ?? 'NO @deferred-until: line, so nobody knows when this is due'}`)}`
+    );
+
+  if (parked.some((d) => !d.until)) {
+    console.error(
+      RED('\nmigrations: a deferred migration does not say when it comes due.')
+    );
+    console.error(
+      '  Add `-- @deferred-until: <the condition>` to it. A file parked with no\n' +
+        '  stated condition is not deferred, it is abandoned.'
+    );
+    return 1;
+  }
+
   console.log(GREEN(`migrations: database matches all ${all.length} files.`));
+  if (parked.length)
+    console.log(
+      DIM(`           ${parked.length} deferred, held out of the push path on purpose.`)
+    );
   return 0;
 }
 

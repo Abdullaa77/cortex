@@ -20,11 +20,17 @@ import { readFileSync, readdirSync } from 'node:fs';
  */
 
 const DIR = new URL('../../../supabase/migrations/', import.meta.url);
+// Written and reviewed, held out of the push path until its condition is met.
+// Read here too: a migration waiting for a date is still a migration, and the
+// invariants below are exactly what should hold before it runs, not after.
+const DEFERRED_DIR = new URL('../../../supabase/deferred/', import.meta.url);
 
-const SQL = readdirSync(DIR)
-  .filter((f) => f.endsWith('.sql'))
-  .sort()
-  .map((f) => ({ file: f, text: readFileSync(new URL(f, DIR), 'utf8') }));
+const read = (dir: URL) =>
+  readdirSync(dir)
+    .filter((f) => f.endsWith('.sql'))
+    .map((f) => ({ file: f, text: readFileSync(new URL(f, dir), 'utf8') }));
+
+const SQL = [...read(DIR), ...read(DEFERRED_DIR)].sort((a, b) => a.file.localeCompare(b.file));
 
 const ALL = SQL.map((s) => s.text).join('\n');
 

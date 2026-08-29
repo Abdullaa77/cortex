@@ -1,11 +1,12 @@
--- @sentinel: deferred until the September cutover has put a real checkpoint on every real account; see the header
+-- @deferred-until: the September cutover has put a real checkpoint on every real account
 -- ============================================
 -- 011 — retire finance_opening_balance, once its figure demonstrably landed
 -- ============================================
--- DEFERRED ON PURPOSE. Do not run this with 008–010.
---
--- @deferred until the cutover has been completed and /finance shows a
---   checkpoint on every real account. Run it then, on its own.
+-- DEFERRED ON PURPOSE. It lives in supabase/deferred/, NOT supabase/migrations/,
+-- because `supabase db push` reads the directory and not the comments: a file
+-- sitting in migrations/ gets applied by the next push whatever it says about
+-- waiting. To run it, move it into migrations/ and push — a deliberate act,
+-- visible in a diff.
 --
 -- Why it is its own migration rather than the last statement of 009:
 --
