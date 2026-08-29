@@ -148,6 +148,8 @@ export default function FinancePage() {
           <PositionsCard
             positions={positions}
             household={household}
+            error={accounts.error}
+            onRetry={accounts.refetch}
             onCount={setCountingId}
             onSetRate={() => setSettingRate(true)}
           />
@@ -207,6 +209,8 @@ export default function FinancePage() {
         <PositionsCard
           positions={positions}
           household={household}
+          error={accounts.error}
+          onRetry={accounts.refetch}
           onCount={setCountingId}
           onSetRate={() => setSettingRate(true)}
         />

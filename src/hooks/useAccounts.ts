@@ -70,8 +70,13 @@ export function useAccounts() {
           .maybeSingle(),
       ]);
 
+      // All three are checked, including settings. `.maybeSingle()` reports no
+      // rows as data:null with error:null, so a real failure here is a real
+      // failure — and swallowing it is how a missing finance_settings table
+      // became "no settings set yet" instead of "could not ask".
       if (accRes.error) throw accRes.error;
       if (cpRes.error) throw cpRes.error;
+      if (setRes.error) throw setRes.error;
 
       setAccounts((accRes.data ?? []) as AccountRecord[]);
       setCheckpoints(
@@ -93,6 +98,13 @@ export function useAccounts() {
       );
       setError(null);
     } catch (err) {
+      // The lists are cleared, not left holding a stale copy — but `error` is
+      // what the UI must key off. An empty array means "there are none"; it
+      // must never be the only trace of "the question failed". See
+      // PositionsCard, which renders those two as different things.
+      setAccounts([]);
+      setCheckpoints([]);
+      setSettings(NO_SETTINGS);
       setError(err instanceof Error ? err.message : 'Failed to load accounts');
     } finally {
       setLoading(false);

@@ -1,3 +1,4 @@
+-- @sentinel: column transactions.reimburses_transaction_id
 -- ============================================
 -- CORTEX — Finance: linked transactions (reimbursements)
 -- ============================================

@@ -8,7 +8,7 @@ import { useFinanceSummary } from '@/hooks/useFinanceSummary';
 import { formatAmount, formatMinor } from '@/lib/finance/format';
 import { validateAccountDraft, type AccountDraft, type AccountRecord } from '@/lib/finance/accounts';
 import { today } from '@/lib/finance/positions';
-import { Check, Plus, ArrowRight, ArrowLeft } from 'lucide-react';
+import { Check, Plus, ArrowRight, ArrowLeft, AlertCircle, RefreshCw } from 'lucide-react';
 
 /**
  * The cutover: one sitting, not three.
@@ -51,6 +51,40 @@ export default function CutoverPage() {
       <AppShell>
         <div className="p-6">
           <LoadingState />
+        </div>
+      </AppShell>
+    );
+
+  // Same rule PositionsCard keeps: a load that failed is not a household with
+  // no accounts. Walking someone through a cutover on top of a broken read
+  // would have them create accounts that already exist, and count drawers that
+  // already have checkpoints.
+  if (store.error)
+    return (
+      <AppShell>
+        <div className="mx-auto max-w-2xl p-4 pb-8 lg:px-10 lg:py-6 page-enter">
+          <Header />
+          <div className="rounded-lg border border-[#EF4444]/30 bg-[#EF4444]/[0.04] px-3 py-3">
+            <p className="flex items-center gap-1.5 font-mono text-[11px] text-[#EF4444]">
+              <AlertCircle size={12} className="shrink-0" />
+              Could not load the accounts.
+            </p>
+            <p className="mt-1 font-mono text-[11px] leading-relaxed text-text-muted">
+              The cutover cannot start without knowing which accounts already
+              exist — an empty list here would be a guess, not an answer.
+            </p>
+            <p className="mt-1.5 break-words font-mono text-[10px] leading-relaxed text-text-muted/70">
+              {store.error}
+            </p>
+            <button
+              type="button"
+              onClick={store.refetch}
+              className="mt-2 inline-flex items-center gap-1.5 font-mono text-xs text-accent
+                transition-colors hover:text-accent-dim"
+            >
+              <RefreshCw size={12} /> Try again
+            </button>
+          </div>
         </div>
       </AppShell>
     );

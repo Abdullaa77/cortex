@@ -1,3 +1,4 @@
+-- @sentinel: unprobeable it only replaces SECURITY DEFINER functions, and probing an RPC over REST means calling it — which would seed rows
 -- ============================================
 -- Harden the SECURITY DEFINER seed functions
 -- ============================================

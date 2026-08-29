@@ -1,3 +1,4 @@
+-- @sentinel: column transactions.beneficiary
 -- ============================================
 -- CORTEX — Finance: who consumed it (Stage 3)
 -- ============================================

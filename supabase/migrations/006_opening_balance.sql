@@ -1,3 +1,4 @@
+-- @sentinel: table finance_opening_balance
 -- ============================================
 -- CORTEX — Finance: opening balance
 -- ============================================

@@ -1,3 +1,4 @@
+-- @sentinel: table balance_checkpoints
 -- ============================================
 -- CORTEX — Finance: the count that proves the ledger (Stage 2)
 -- ============================================
@@ -221,12 +222,13 @@ ALTER TABLE finance_settings
   ADD COLUMN fx_rate_set_at DATE;
 
 -- ============================================
--- Migrate the two opening balances into checkpoints, then drop them
+-- Migrate the two opening balances into checkpoints
 -- ============================================
 -- Both of these say "what was in there when this started", which is what a
 -- checkpoint says. Stage 1 wrote down that finance_opening_balance must be
 -- MIGRATED AND DROPPED here rather than left alive beside its replacement.
--- Doing so.
+-- Migrating it here; the drop moved to 011, for the reason written at the
+-- assertion below.
 --
 -- Order matters: accounts.opening_* first (it is per-account and needs no
 -- guess), then finance_opening_balance (which is household-wide and has to
@@ -303,11 +305,71 @@ BEGIN
   END LOOP;
 END $$;
 
-DROP TABLE finance_opening_balance;
+-- ============================================
+-- The drop is asserted here and DEFERRED to 011
+-- ============================================
+-- The loop above is fail-safe and not fail-visible: a user with an opening
+-- balance but no account is skipped silently, and the DROP that used to stand
+-- here then took the only record of what they started with, with exit code 0.
+-- Nothing would have looked wrong. That is the shape to refuse, not to guard
+-- and hope.
+--
+-- So this migration now asserts and does not drop. It RAISEs if any opening
+-- balance failed to become a checkpoint — refusing, rather than skipping —
+-- and 011 does the drop once the cutover has put real checkpoints on real
+-- accounts. The table sitting alive for a few more days costs nothing; the
+-- three-day window in which it is the only copy of a hand-entered figure is
+-- the whole risk, and deferring deletes it rather than guarding it.
+
+DO $$
+DECLARE
+  v_stranded INT;
+BEGIN
+  SELECT count(*) INTO v_stranded
+  FROM finance_opening_balance o
+  WHERE NOT EXISTS (
+    SELECT 1 FROM balance_checkpoints c
+     WHERE c.user_id       = o.user_id
+       AND c.counted_at    = o.as_of
+       AND c.counted_minor = o.amount_minor
+  );
+
+  IF v_stranded > 0 THEN
+    RAISE EXCEPTION
+      'refusing to continue: % opening balance row(s) did not migrate into a checkpoint. '
+      'A checkpoint with nowhere to land is data loss with a clean exit code.', v_stranded;
+  END IF;
+END $$;
 
 -- The columns Stage 1 added and this stage retired. Dropped rather than left
 -- as a second place to write the same fact — leaving them would guarantee that
 -- one day something writes to one and reads the other.
+--
+-- Same rule as above, and it is cheap: refuse if any account carries an
+-- opening figure that did not become a checkpoint. 008 leaves these 0/NULL on
+-- every backfilled account, so today this asserts over nothing — which is
+-- exactly when a guard should be written, not after it is needed.
+DO $$
+DECLARE
+  v_stranded INT;
+BEGIN
+  SELECT count(*) INTO v_stranded
+  FROM accounts a
+  WHERE a.opening_at IS NOT NULL
+    AND NOT EXISTS (
+      SELECT 1 FROM balance_checkpoints c
+       WHERE c.account_id    = a.id
+         AND c.counted_at    = a.opening_at
+         AND c.counted_minor = a.opening_minor
+    );
+
+  IF v_stranded > 0 THEN
+    RAISE EXCEPTION
+      'refusing to drop accounts.opening_*: % account(s) hold an opening figure '
+      'that is not in balance_checkpoints.', v_stranded;
+  END IF;
+END $$;
+
 ALTER TABLE accounts
   DROP COLUMN opening_minor,
   DROP COLUMN opening_at;
