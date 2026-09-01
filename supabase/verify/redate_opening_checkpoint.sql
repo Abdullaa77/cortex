@@ -1,10 +1,33 @@
--- The 1 July opening checkpoint, and why it has to move to 30 June.
+-- The 1 July opening checkpoint, and why it had to move to 30 June.
 --
--- Run the SELECT first, read it, then run the UPDATE if the numbers say what
--- this file says they will.
+-- APPLIED 2026-09-01, before the cutover count, against checkpoint
+-- 029f5696-ad71-4e30-bea7-968623783275 — Main, 6,125,000.00, the only
+-- checkpoint that existed. Kept as the record of what was changed and why; it
+-- is a one-shot and re-running it now matches nothing.
 --
--- THE PROBLEM, in one sentence: a count is the last word for the day it was
--- taken, and 65 imported rows carry month precision and are stamped 1 July —
+-- Read before: one checkpoint on 1 July; 65 rows stamped 1 July, all of them
+-- month-precision, net -6,239,367.74 by the pointers; nothing on 30 June and
+-- no transaction dated on or before it, so moving the date swallowed nothing.
+--
+-- Read after: the two derivations agree to 0.00 at the end of every month.
+--
+--   2026-07  opening  6,125,000.00  closing   -144,867.74
+--   2026-08  opening   -144,867.74  closing  3,504,671.87
+--   2026-09  opening  3,490,123.87  closing  3,490,123.87   (seeded at the cutover)
+--
+-- July closes 144,867.74 below zero and is flagged impossible. That is the
+-- panel doing its job on reference data, not a consequence of the move: the
+-- same opening produced the same July closing before it. The reconstructed
+-- July notes are short about that much income.
+--
+-- 30 June IS THE CORRECT CLAIM, not a workaround. Scott entered that figure as
+-- "the money I had at the beginning of July", which is a fact about the end of
+-- 30 June. Migration 009 carried finance_opening_balance.as_of across verbatim
+-- and the 1 July stamp was the fiction; this removes it rather than
+-- compensating for it.
+--
+-- THE PROBLEM it was causing, in one sentence: a count is the last word for
+-- the day it was taken, and 65 imported rows carry month precision and are stamped 1 July —
 -- the same day as the opening checkpoint migration 009 carried across from
 -- finance_opening_balance. So `balanceAt` treats the whole of July as already
 -- inside the opening figure and drops it, while the month rollforward counts
