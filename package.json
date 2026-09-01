@@ -10,6 +10,7 @@
     "prebuild": "node scripts/check-migrations.mjs",
     "build": "next build",
     "check:migrations": "node scripts/check-migrations.mjs",
+    "check:deployed": "node scripts/check-deployed.mjs",
     "start": "next start",
     "lint": "eslint",
     "test": "node scripts/run-tests.mjs"

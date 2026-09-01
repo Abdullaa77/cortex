@@ -19,6 +19,16 @@
  * The toolchain check is in front of it because that is what actually broke:
  * `node`, `npm` and `npx` must all come from the same place, and it must not
  * be Windows.
+ *
+ * AND THE SUITE SAYS WHAT IT IS GREEN ABOUT. On 1 September 2026 605 tests
+ * passed over a cutover guard that had been committed and never pushed;
+ * production was serving a build in which the guard did not exist, and a count
+ * of thirteen drawers wrote 3,488,123.87 so'm of fiction. Every check was
+ * telling the truth about the working tree. Nobody had asked the other
+ * question. So the summary now names any unpushed commits, using only the
+ * remote-tracking ref — no network, no delay, wrong only in the safe
+ * direction if the ref is stale. `npm run check:deployed` asks the deployment
+ * itself; this is the free half that would have caught it.
  */
 import { spawn } from 'node:child_process';
 import { execFileSync } from 'node:child_process';
@@ -61,6 +71,32 @@ if (problems.length) {
   process.exit(1);
 }
 
+/**
+ * Commits that exist here and nowhere else, from the last known origin/main.
+ *
+ * Offline on purpose: this runs on every suite invocation and must not add a
+ * network round trip to it. A stale remote-tracking ref can only make this
+ * over-report, never under-report — it names commits that may already have
+ * been pushed, and never stays quiet about ones that have not.
+ */
+function unpushed() {
+  try {
+    const branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+    const log = execFileSync('git', ['log', '--oneline', `origin/${branch}..HEAD`], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+    return log ? { branch, commits: log.split('\n') } : null;
+  } catch {
+    // No repo, no upstream, detached HEAD. Not knowing is not a failure here —
+    // check:deployed is the one that refuses.
+    return null;
+  }
+}
+
 const child = spawn(process.execPath, ['--test', PATTERN], { stdio: ['inherit', 'pipe', 'inherit'] });
 
 let out = '';
@@ -87,6 +123,23 @@ child.on('close', (code) => {
         '  having gone missing without saying so.'
     );
     process.exit(1);
+  }
+
+  // Printed after the summary, where the eye already is, and only when there
+  // is something to say. Never fatal: the suite's result is about the working
+  // tree and is not made wrong by an unpushed commit. It is made MISLEADING,
+  // which is what this sentence is for.
+  const drift = unpushed();
+  if (drift) {
+    const { branch, commits } = drift;
+    process.stdout.write(
+      `\n\x1b[33mgreen — about code that is not deployed.\x1b[0m\n\n` +
+        `  ${commits.length} commit${commits.length === 1 ? '' : 's'} on ${branch} ` +
+        `${commits.length === 1 ? 'is' : 'are'} not on origin/${branch}:\n` +
+        commits.map((l) => `    ${l}`).join('\n') +
+        `\n\n  This suite describes the working tree. If you are about to say a\n` +
+        `  bug is fixed in the app, run: npm run check:deployed\n`
+    );
   }
 
   process.exit(code ?? 1);

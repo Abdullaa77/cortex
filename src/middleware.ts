@@ -16,8 +16,12 @@ export const config = {
      *   makes the app uninstallable as a PWA)
      * - sw.js (service worker script + its scope)
      * - offline (the offline fallback page must render without a session)
+     * - api/version (the build stamp. A commit SHA of a public repo is not a
+     *   secret, and scripts/check-deployed.mjs has no session to offer — a
+     *   redirect to /login here would make "what is deployed" unanswerable,
+     *   which is the question that cost a day)
      * - public assets (svg, png, jpg, etc.)
      */
-    '/((?!_next/static|_next/image|favicon.ico|manifest.json|sw.js|offline|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|manifest.json|sw.js|offline|api/version|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 };
