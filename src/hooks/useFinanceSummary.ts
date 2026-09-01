@@ -9,8 +9,8 @@ import {
   allMonthKeys,
   foreignRowCount,
 } from '@/lib/finance/summarize';
-import { reconcile } from '@/lib/finance/reconcile';
-import { positionsAt, householdTotal, openingFromCheckpoints, today } from '@/lib/finance/positions';
+import { rollforward } from '@/lib/finance/reconcile';
+import { positionsAt, householdTotal, today } from '@/lib/finance/positions';
 import { checkpointLedger, gapPattern, type MovementRow } from '@/lib/finance/checkpoints';
 import { needsOtherSide } from '@/lib/finance/transfers';
 import { UNACCOUNTED_SLUG } from '@/lib/finance/checkpoints';
@@ -58,30 +58,8 @@ export function useFinanceSummary() {
    */
   const allMonths = useMemo(() => monthTotals(rows), [rows]);
 
-  /**
-   * The household opening, out of the counts.
-   *
-   * Same arithmetic `reconcile` has always run; one fewer source of truth
-   * behind it. Before any account has been counted there is no opening, and
-   * the page states what the first month would have needed instead of printing
-   * a closing balance that cannot be right — exactly as before.
-   */
-  const opening = useMemo(
-    () => openingFromCheckpoints(accounts.accounts, accounts.checkpoints, accounts.rate),
-    [accounts.accounts, accounts.checkpoints, accounts.rate]
-  );
-
-  const reconciliation = useMemo(
-    () =>
-      reconcile(
-        allMonths,
-        opening ? { amountMinor: opening.amountMinor, asOf: opening.asOf } : null
-      ),
-    [allMonths, opening]
-  );
-
   /** The rows in the shape the position math reads. Built once. */
-  const movements = useMemo<MovementRow[]>(
+  const movementsForSeeds = useMemo<MovementRow[]>(
     () =>
       rows.map((r) => ({
         id: r.id,
@@ -92,6 +70,34 @@ export function useFinanceSummary() {
       })),
     [rows]
   );
+
+  /**
+   * The months, walked forward. One assembled path, shared with the test that
+   * checks it against the positions total — see `rollforward`.
+   */
+  const reconciliation = useMemo(
+    () =>
+      rollforward({
+        rows,
+        months: allMonths,
+        accounts: accounts.accounts,
+        checkpoints: accounts.checkpoints,
+        movements: movementsForSeeds,
+        rate: accounts.rate,
+        cutoverDate: accounts.settings.cutoverDate,
+      }),
+    [
+      rows,
+      allMonths,
+      accounts.accounts,
+      accounts.checkpoints,
+      movementsForSeeds,
+      accounts.rate,
+      accounts.settings.cutoverDate,
+    ]
+  );
+
+  const movements = movementsForSeeds;
 
   const asOfToday = useMemo(() => today(), []);
 
@@ -174,7 +180,8 @@ export function useFinanceSummary() {
     keys,
     allMonths,
     reconciliation,
-    opening,
+    // `opening` is not returned separately: it lives on `reconciliation.opening`,
+    // where it is stamped with the day it is a fact about.
     accounts,
     movements,
     positions,

@@ -35,7 +35,7 @@ const rows: TransactionRow[] = imported.rows.map((r, i) => {
 });
 
 const months = monthTotals(rows);
-const OPENING = { amountMinor: 8_000_000 * 100, asOf: '2026-07-01' };
+const OPENING = { amountMinor: 8_000_000 * 100, asOf: '2026-06-30' };
 const withOpening = reconcile(months, OPENING);
 const withoutOpening = reconcile(months, null);
 
@@ -170,7 +170,7 @@ describe('waterfall — axis and geometry', () => {
   });
 
   test('a negative closing draws its bar on the other side of zero', () => {
-    const broke = reconcile(months, { amountMinor: 0, asOf: '2026-07-01' });
+    const broke = reconcile(months, { amountMinor: 0, asOf: '2026-06-30' });
     const chart = buildWaterfall(broke.months[0], julySlices);
     const closing = chart.steps.at(-1)!;
     assert.ok(closing.endMinor < 0);
@@ -190,7 +190,7 @@ describe('waterfall — axis and geometry', () => {
           transferOutMinor: 0,
         },
       ],
-      { amountMinor: 0, asOf: '2026-07-01' }
+      { amountMinor: 0, asOf: '2026-06-30' }
     );
     const chart = buildWaterfall(flat.months[0], []);
     for (const s of chart.steps) {

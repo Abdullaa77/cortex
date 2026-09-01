@@ -16,6 +16,7 @@ import {
   CORPUS_RECORDS,
   IMPORTED,
   OPENING,
+  OPENING_COUNTED_AT,
   ACCOUNTS,
   CHECKPOINTS,
   MOVEMENTS,
@@ -30,7 +31,7 @@ import { buildWaterfall } from '../src/lib/finance/waterfall.ts';
 import {
   positionsAt,
   householdTotal,
-  openingFromCheckpoints,
+  householdAt,
 } from '../src/lib/finance/positions.ts';
 import { checkpointLedger, gapPattern } from '../src/lib/finance/checkpoints.ts';
 import { needsOtherSide } from '../src/lib/finance/transfers.ts';
@@ -57,7 +58,11 @@ import {
 
 const summary = summarize(CORPUS_ROWS);
 const months = monthTotals(CORPUS_ROWS);
-const withOpening = reconcile(months, OPENING);
+// Dated where the checkpoint actually sits, not where Stage 1's hand-entered
+// figure claimed. A count is the last word for its own day, so a 1 July figure
+// cannot open July; see the note beside OPENING_COUNTED_AT in the corpus.
+const LEDGER_OPENING = { amountMinor: OPENING.amountMinor, asOf: OPENING_COUNTED_AT };
+const withOpening = reconcile(months, LEDGER_OPENING);
 const withoutOpening = reconcile(months, null);
 
 /** Rows are identified by content, not by index — indices are an artefact. */
@@ -181,9 +186,9 @@ const snapshot = {
     ),
 
     // The opening balance, now derived from the counts rather than a table.
-    openingFromCheckpoints: {
-      withRate: openingFromCheckpoints(ACCOUNTS, CHECKPOINTS, FX_RATE),
-      withoutRate: openingFromCheckpoints(ACCOUNTS, CHECKPOINTS, null),
+    householdAt: {
+      withRate: householdAt(ACCOUNTS, CHECKPOINTS, MOVEMENTS, FX_RATE, OPENING_COUNTED_AT),
+      withoutRate: householdAt(ACCOUNTS, CHECKPOINTS, MOVEMENTS, null, OPENING_COUNTED_AT),
       stage1Figure: OPENING,
     },
 

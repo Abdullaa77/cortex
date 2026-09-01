@@ -493,7 +493,8 @@
           "netMinor": -625604974,
           "closingMinor": 174395026,
           "impossible": false,
-          "shortfallMinor": 0
+          "shortfallMinor": 0,
+          "seededAsOf": "2026-06-30"
         },
         {
           "key": "2026-08",
@@ -506,12 +507,13 @@
           "netMinor": 13408085,
           "closingMinor": 187803111,
           "impossible": false,
-          "shortfallMinor": 0
+          "shortfallMinor": 0,
+          "seededAsOf": null
         }
       ],
       "opening": {
         "amountMinor": 800000000,
-        "asOf": "2026-07-01"
+        "asOf": "2026-06-30"
       },
       "requiredOpeningMinor": 625604974,
       "firstMonthKey": "2026-07",
@@ -531,7 +533,8 @@
           "netMinor": -625604974,
           "closingMinor": null,
           "impossible": false,
-          "shortfallMinor": 0
+          "shortfallMinor": 0,
+          "seededAsOf": null
         },
         {
           "key": "2026-08",
@@ -544,7 +547,8 @@
           "netMinor": 13408085,
           "closingMinor": null,
           "impossible": false,
-          "shortfallMinor": 0
+          "shortfallMinor": 0,
+          "seededAsOf": null
         }
       ],
       "opening": null,
@@ -2701,17 +2705,13 @@
         }
       }
     },
-    "openingFromCheckpoints": {
+    "householdAt": {
       "withRate": {
         "amountMinor": 1426000000,
         "asOf": "2026-06-30",
         "skippedAccounts": 0
       },
-      "withoutRate": {
-        "amountMinor": 920000000,
-        "asOf": "2026-06-30",
-        "skippedAccounts": 1
-      },
+      "withoutRate": null,
       "stage1Figure": {
         "amountMinor": 800000000,
         "asOf": "2026-07-01"

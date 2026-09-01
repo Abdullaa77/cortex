@@ -95,3 +95,22 @@ export function atLocalNoon(day: string): string {
   const [y, m, d] = day.split('-').map(Number);
   return new Date(y, m - 1, d, 12, 0, 0, 0).toISOString();
 }
+
+/**
+ * The day before a given day, YYYY-MM-DD.
+ *
+ * Built through UTC rather than local time. This is pure calendar arithmetic
+ * on a written-down date, and routing it through a local Date would let a DST
+ * jump return the same day twice — which, for a figure that opens a month,
+ * would silently move where the ledger starts.
+ */
+export function dayBefore(day: string): string {
+  const [y, m, d] = day.split('-').map(Number);
+  const t = new Date(Date.UTC(y, m - 1, d));
+  t.setUTCDate(t.getUTCDate() - 1);
+  return (
+    `${t.getUTCFullYear()}-` +
+    `${String(t.getUTCMonth() + 1).padStart(2, '0')}-` +
+    `${String(t.getUTCDate()).padStart(2, '0')}`
+  );
+}

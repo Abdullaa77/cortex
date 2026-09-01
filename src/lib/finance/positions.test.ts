@@ -4,7 +4,7 @@ import {
   positionsAt,
   householdTotal,
   convertUsdToUzs,
-  openingFromCheckpoints,
+  householdAt,
   daysBetween,
   type FxRate,
 } from './positions.ts';
@@ -206,23 +206,31 @@ describe('whose money it is', () => {
   });
 });
 
-describe('the opening balance comes from the counts now', () => {
-  test('it is the sum of every first checkpoint, as of the earliest', () => {
-    const opening = openingFromCheckpoints(ACCOUNTS, CHECKPOINTS, FX_RATE)!;
+describe('the household figure the months open from', () => {
+  const OPENING_DAY = OPENING_COUNTED_AT; // 30 June, the day before the ledger starts
+
+  test('it is every account as of the day asked for, and carries that day', () => {
+    const opening = householdAt(ACCOUNTS, CHECKPOINTS, MOVEMENTS, FX_RATE, OPENING_DAY)!;
     // 8,000,000 + 1,200,000 + $400 at 12,650 + 0
     assert.equal(opening.amountMinor, 800_000_000 + 120_000_000 + 506_000_000 + 0);
-    assert.equal(opening.asOf, OPENING_COUNTED_AT);
+    assert.equal(opening.asOf, OPENING_DAY);
     assert.equal(opening.skippedAccounts, 0);
   });
 
-  test("Main's own first count is still exactly the Stage 1 figure", () => {
+  test("Main's own count is still exactly the Stage 1 figure", () => {
     const mainOnly = CHECKPOINTS.filter((c) => c.account_id === MAIN_ID);
-    const opening = openingFromCheckpoints(ACCOUNTS, mainOnly, FX_RATE)!;
+    const opening = householdAt(ACCOUNTS, mainOnly, MOVEMENTS, FX_RATE, OPENING_DAY)!;
     assert.equal(opening.amountMinor, OPENING.amountMinor);
-    assert.equal(opening.asOf, OPENING_COUNTED_AT);
+    assert.equal(opening.asOf, OPENING_DAY);
   });
 
-  test('a later count never becomes the opening', () => {
+  /**
+   * The defect this replaced. It summed each account's FIRST-EVER checkpoint
+   * and reported the earliest of their dates, so a count taken months later
+   * could never move it and a brand-new account's cash landed under an old
+   * date. Asked for a day, it answers about that day.
+   */
+  test('a later count DOES move the figure asked for on a later day', () => {
     const later: BalanceCheckpoint = {
       id: 'cp-main-1',
       account_id: MAIN_ID,
@@ -231,21 +239,35 @@ describe('the opening balance comes from the counts now', () => {
       note: null,
       adjustment_transaction_id: null,
     };
-    const opening = openingFromCheckpoints(ACCOUNTS, [later, ...CHECKPOINTS], FX_RATE)!;
-    assert.equal(opening.amountMinor, 800_000_000 + 120_000_000 + 506_000_000);
+    const withLater = [later, ...CHECKPOINTS];
+    // On 30 June the later count has not happened, so it changes nothing.
+    assert.equal(
+      householdAt(ACCOUNTS, withLater, MOVEMENTS, FX_RATE, OPENING_DAY)!.amountMinor,
+      householdAt(ACCOUNTS, CHECKPOINTS, MOVEMENTS, FX_RATE, OPENING_DAY)!.amountMinor
+    );
+    // On the day it was taken, Main rests on it and nothing before it votes.
+    const after = householdAt(ACCOUNTS, withLater, MOVEMENTS, FX_RATE, '2026-08-15')!;
+    assert.equal(after.asOf, '2026-08-15');
+    assert.equal(after.amountMinor, 1 + 120_000_000 + 506_000_000);
+  });
+
+  test('an account counted only later is left out, not counted as zero', () => {
+    // Nobody had counted it on the day asked about, so it contributes nothing
+    // and says so. Folding a null in as zero is the lie this file exists to
+    // refuse.
+    const mainOnly = CHECKPOINTS.filter((c) => c.account_id === MAIN_ID);
+    const opening = householdAt(ACCOUNTS, mainOnly, MOVEMENTS, FX_RATE, OPENING_DAY)!;
+    assert.equal(opening.skippedAccounts, 3);
   });
 
   test('without a rate the dollar account is LEFT OUT, never added raw', () => {
     // $400 added as 400 so'm would be a rounding error; added as 40,000 tiyin
-    // it is still off by a factor of twelve thousand. Skipping is the only
-    // answer that is not quietly wrong, and the count of skips is reported.
-    const opening = openingFromCheckpoints(ACCOUNTS, CHECKPOINTS, null)!;
-    assert.equal(opening.amountMinor, 800_000_000 + 120_000_000);
-    assert.equal(opening.skippedAccounts, 1);
+    // it is still off by a factor of twelve thousand.
+    assert.equal(householdAt(ACCOUNTS, CHECKPOINTS, MOVEMENTS, null, OPENING_DAY), null);
   });
 
-  test('no checkpoints at all means no opening — not an opening of zero', () => {
-    assert.equal(openingFromCheckpoints(ACCOUNTS, [], FX_RATE), null);
+  test('no checkpoints at all means no figure — not a figure of zero', () => {
+    assert.equal(householdAt(ACCOUNTS, [], MOVEMENTS, FX_RATE, OPENING_DAY), null);
   });
 });
 

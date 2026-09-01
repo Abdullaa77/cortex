@@ -20,10 +20,29 @@ interface ReconcileBlockProps {
  * and until the opening was carried in from the month before, this block could
  * only show a net change — true, and unable to say whether it was possible.
  */
+/**
+ * Where the opening figures came from: a count, or the month before.
+ *
+ * Named rather than assumed, because the two are different claims. One rests
+ * on a drawer somebody opened; the other rests on arithmetic over everything
+ * that came before it.
+ */
+function seededLabel(ledgers: MonthLedger[]): string {
+  const seeded = ledgers.filter((l) => l.seededAsOf);
+  if (seeded.length === 0) return 'carried from the month before';
+  if (seeded.length === ledgers.length && ledgers.length === 1)
+    return `counted on ${seeded[0].seededAsOf}`;
+  return `counted on ${seeded.map((l) => l.seededAsOf).join(', ')}; the rest carried forward`;
+}
+
 export default function ReconcileBlock({ ledgers }: ReconcileBlockProps) {
   if (ledgers.length === 0) return null;
 
-  const known = ledgers[0].openingMinor !== null;
+  // Every month on screen, not just the first. An opening is per-month now: a
+  // figure only opens the month it is a fact about, so July can be unknown
+  // while August rests on a count. Reading one month's answer for both is how
+  // `null` would end up rendered as an amount.
+  const known = ledgers.every((l) => l.openingMinor !== null);
   const impossible = ledgers.filter((l) => l.impossible);
 
   const lines: {
@@ -66,7 +85,14 @@ export default function ReconcileBlock({ ledgers }: ReconcileBlockProps) {
             <div className="font-mono text-xs text-text-muted">
               Opening
               <span className="ml-1.5 text-[10px] text-text-muted/50">
-                carried from the month before
+                {/*
+                  A seeded month did NOT carry anything from the month before —
+                  the count cut the chain there, which is the whole point of a
+                  cutover. Saying "carried from the month before" over a figure
+                  somebody physically counted would describe the wrong thing
+                  with total confidence.
+                */}
+                {seededLabel(ledgers)}
               </span>
             </div>
             {ledgers.map((l) => (

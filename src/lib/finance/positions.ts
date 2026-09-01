@@ -186,58 +186,61 @@ export function householdTotal(
 }
 
 /**
- * The household's opening balance, for the month reconciliation.
+ * The household position on a given day, as one so'm figure.
  *
- * /finance still walks the months from a single opening figure, and that
- * figure now comes from the counts rather than from a table of its own — it is
- * the sum of every account's FIRST checkpoint, as of the earliest of them.
- * Same arithmetic the page has always run, one fewer source of truth behind
- * it.
+ * This is what the month rollforward opens from, and it is deliberately the
+ * SAME derivation the positions list shows — `positionsAt` then
+ * `householdTotal`, no second path. The two figures on /finance are meant to
+ * be independent routes to the same number, and the way to keep that
+ * meaningful is for the seed to be exact rather than approximately right.
  *
- * Dollar accounts are converted at the stated rate, and without a rate they
- * are left out entirely rather than added in raw — a dollar counted as a som
- * would move the opening by a factor of twelve thousand, which is precisely
- * the averaging this file exists to refuse. The count of what was skipped
- * comes back so the page can say so.
+ * WHAT THIS REPLACED, AND WHY. It used to sum every account's FIRST-EVER
+ * checkpoint and report the earliest of their dates as the as-of. Two things
+ * were wrong with that, and both were live:
+ *
+ *   - An account's first checkpoint is not its opening for any month but the
+ *     first. Once Main has been counted again at the cutover, its first
+ *     checkpoint is a figure from two months ago, and the rollforward went on
+ *     opening from it forever.
+ *
+ *   - A brand-new account counted at the cutover contributed its SEPTEMBER
+ *     cash to a figure stamped 30 JUNE, because the as-of was the minimum
+ *     across accounts. The July opening moved by the amount in his mother's
+ *     drawer, and then two months of household spend were subtracted from it.
+ *
+ * The as-of is now the day that was asked for, and nothing else. A figure that
+ * carries a date and is then applied somewhere else is worse than a figure
+ * with no date at all: the audit trail states the wrong thing confidently.
+ *
+ * Null when nobody had been counted by that day, or when there are dollars and
+ * no rate — the same two refusals `householdTotal` already makes, for the same
+ * reason. A seed that guessed would put an invented figure under every month.
  */
-export function openingFromCheckpoints(
+export interface HouseholdSnapshot {
+  amountMinor: number;
+  /** The day this figure is a fact about. Never a different day. */
+  asOf: string;
+  /** Accounts left out: uncounted on that day, or dollars with no rate. */
+  skippedAccounts: number;
+}
+
+export function householdAt(
   accounts: AccountRecord[],
   checkpoints: BalanceCheckpoint[],
-  rate: FxRate | null
-): { amountMinor: number; asOf: string; skippedAccounts: number } | null {
-  const firsts = new Map<string, BalanceCheckpoint>();
-  for (const c of checkpoints) {
-    const held = firsts.get(c.account_id);
-    if (!held || c.counted_at < held.counted_at) firsts.set(c.account_id, c);
-  }
-  if (firsts.size === 0) return null;
+  rows: MovementRow[],
+  rate: FxRate | null,
+  day: string
+): HouseholdSnapshot | null {
+  const positions = positionsAt(accounts, checkpoints, rows, day);
+  const counted = positions.filter((p) => !p.uncounted);
+  if (counted.length === 0) return null;
 
-  const byId = new Map(accounts.map((a) => [a.id, a]));
-  let amountMinor = 0;
-  let skippedAccounts = 0;
-  let asOf: string | null = null;
+  const household = householdTotal(positions, rate);
+  if (household.totalUzsMinor === null) return null;
 
-  for (const [accountId, checkpoint] of firsts) {
-    const account = byId.get(accountId);
-    // A checkpoint whose account is gone should be impossible — the column is
-    // ON DELETE CASCADE — but a page holding a stale array is not, and adding
-    // an amount of unknown currency is the one thing worth refusing outright.
-    if (!account) {
-      skippedAccounts++;
-      continue;
-    }
-    if (account.currency === 'USD') {
-      if (!rate) {
-        skippedAccounts++;
-        continue;
-      }
-      amountMinor += convertUsdToUzs(checkpoint.counted_minor, rate);
-    } else {
-      amountMinor += checkpoint.counted_minor;
-    }
-    if (!asOf || checkpoint.counted_at < asOf) asOf = checkpoint.counted_at;
-  }
-
-  if (asOf === null) return null;
-  return { amountMinor, asOf, skippedAccounts };
+  return {
+    amountMinor: household.totalUzsMinor,
+    asOf: day,
+    skippedAccounts: household.uncounted.length,
+  };
 }

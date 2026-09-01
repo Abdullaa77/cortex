@@ -52,14 +52,47 @@ const STAGE1_KEYS = [
 ] as const;
 
 /**
- * sha256 of those six sections, taken before any Stage 2 code was written.
+ * sha256 of those six sections.
  *
  * Accounts, checkpoints, positions, the currency guard on the month totals and
- * the repair to migration 008's backfill have all landed since, and this has
- * not moved. That is the claim.
+ * the repair to migration 008's backfill all landed without moving it.
+ *
+ * MOVED ONCE, for the reconcile reset, and no amount moved with it. Two
+ * changes are inside the digest and neither is a figure:
+ *
+ *   - `MonthLedger` gained `seededAsOf`, which is null on every month that
+ *     chains. A new field, not an edited one.
+ *   - the snapshot now dates the opening 2026-06-30 instead of 2026-07-01 —
+ *     where the corpus checkpoint actually sits. A count is the last word for
+ *     its own day, so a 1 July figure cannot open July; see OPENING_COUNTED_AT.
+ *
+ * Every openingMinor, netMinor and closingMinor is byte-identical across the
+ * change, and `the month figures did not move` below asserts that directly
+ * rather than leaving the digest to speak for it.
+ *
+ * Previous: b18626b3af3b834a946c946c6098a115501e23c6bae9f12c5f64c3ae74d2cf00
  */
 const STAGE1_DIGEST =
-  'b18626b3af3b834a946c946c6098a115501e23c6bae9f12c5f64c3ae74d2cf00';
+  '4ce672489867aac5a1356bb25c0f27ec4399b40c95ad7e19a297717bd1a8555e';
+
+/**
+ * The reconciliation figures as they stood BEFORE the reset, written out by
+ * hand from the previous golden file.
+ *
+ * A digest says something moved; it cannot say what. These are the numbers a
+ * person reads off the panel, pinned separately so that a change which is
+ * meant to move provenance can be told apart from one that moves money.
+ */
+const RECONCILIATION_BEFORE_THE_RESET = {
+  withOpening: [
+    { key: '2026-07', openingMinor: 800_000_000, netMinor: -625_604_974, closingMinor: 174_395_026 },
+    { key: '2026-08', openingMinor: 174_395_026, netMinor: 13_408_085, closingMinor: 187_803_111 },
+  ],
+  withoutOpening: [
+    { key: '2026-07', openingMinor: null, netMinor: -625_604_974, closingMinor: null },
+    { key: '2026-08', openingMinor: null, netMinor: 13_408_085, closingMinor: null },
+  ],
+};
 
 const GOLDEN = JSON.parse(
   readFileSync(new URL('./__fixtures__/summary.golden.json', import.meta.url), 'utf8')
@@ -101,6 +134,22 @@ describe('nothing a user can see has moved', () => {
       createHash('sha256').update(JSON.stringify(stage1)).digest('hex'),
       STAGE1_DIGEST
     );
+  });
+
+  test('the month figures did not move', () => {
+    // What the digest cannot say on its own. Every figure a person reads off
+    // the reconciliation panel, against the values from before the reset.
+    for (const [variant, expected] of Object.entries(RECONCILIATION_BEFORE_THE_RESET)) {
+      const got = CURRENT.reconciliation[variant].months.map(
+        (m: { key: string; openingMinor: number | null; netMinor: number; closingMinor: number | null }) => ({
+          key: m.key,
+          openingMinor: m.openingMinor,
+          netMinor: m.netMinor,
+          closingMinor: m.closingMinor,
+        })
+      );
+      assert.deepEqual(got, expected, variant);
+    }
   });
 
   test('the Stage 2 sections are additions, not edits', () => {
@@ -214,7 +263,7 @@ describe('the positions, spelled out', () => {
   });
 
   test("the opening out of the counts is Stage 1's figure, plus the other drawers", () => {
-    const { withRate, stage1Figure } = CURRENT.positions.openingFromCheckpoints;
+    const { withRate, stage1Figure } = CURRENT.positions.householdAt;
     assert.equal(withRate.amountMinor - 120_000_000 - 506_000_000, stage1Figure.amountMinor);
   });
 

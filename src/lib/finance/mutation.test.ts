@@ -10,7 +10,7 @@ import {
   type BalanceCheckpoint,
   type MovementRow,
 } from './checkpoints.ts';
-import { householdTotal, openingFromCheckpoints, positionsAt } from './positions.ts';
+import { householdTotal, householdAt, positionsAt } from './positions.ts';
 import { needsOtherSide, planPairDeletion, type PairableRow } from './transfers.ts';
 import { categoryBreakdown, classifyRow, monthTotals } from './summarize.ts';
 import { ACCOUNT_OWNERS, movementShape, sidesForClass } from './accounts.ts';
@@ -245,9 +245,13 @@ describe('uncounted-is-not-zero is genuinely pinned', () => {
   });
 
   test('adding dollars into a som opening without a rate is caught', () => {
-    const real = openingFromCheckpoints(ACCOUNTS, CHECKPOINTS, null)!;
+    // Without a rate there is no household figure at all — a dollar drawer
+    // cannot be stated in so'm without one, so the honest answer is none. The
+    // mutant adds the cents in with the tiyin and produces a confident number.
+    const real = householdAt(ACCOUNTS, CHECKPOINTS, MOVEMENTS, null, '2026-06-30');
     const mutant = CHECKPOINTS.reduce((n, c) => n + c.counted_minor, 0);
-    detects(() => assert.equal(mutant, real.amountMinor));
+    assert.equal(real, null);
+    detects(() => assert.equal(real, mutant));
   });
 });
 

@@ -6,6 +6,7 @@
  */
 
 import { monthKey, monthLabel } from './format.ts';
+import { dayKey } from './cutover.ts';
 import {
   reimbursementsByTarget,
   effectiveMinor,
@@ -211,6 +212,22 @@ function emptyTotals(key: string): MonthTotals {
  * months the comparison happens to be showing, or a month's opening would be
  * derived from the wrong predecessor.
  */
+/**
+ * Month totals over the rows dated strictly after a day.
+ *
+ * What a re-seeded month needs. A count is the last word for the day it was
+ * taken — `balanceAt` keeps that rule for positions, and the rollforward has
+ * to keep it too, or the cutover day's spending is subtracted once by the
+ * count that already had it missing and again by the month.
+ *
+ * Same function underneath, so a seeded month is aggregated by exactly the
+ * rules every other month is. A second, similar implementation here is how the
+ * panel and the tab would come to disagree about what a transfer is.
+ */
+export function monthTotalsAfter(rows: TransactionRow[], day: string): MonthTotals[] {
+  return monthTotals(rows.filter((r) => dayKey(r.occurred_at) > day));
+}
+
 export function monthTotals(rows: TransactionRow[]): MonthTotals[] {
   const totals = new Map<string, MonthTotals>();
   const reimbursed = reimbursementsByTarget(rows);

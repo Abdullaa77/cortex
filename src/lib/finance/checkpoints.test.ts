@@ -412,7 +412,15 @@ describe('against the real corpus', () => {
     // two independent routes to the same number. `reconcile` walks month
     // totals from an opening balance; `balanceAt` walks individual rows from a
     // physical count. They agree at the end of every month.
-    const ledger = reconcile(monthTotals(CORPUS_ROWS), OPENING);
+    // Dated where the checkpoint actually sits. OPENING.asOf is 1 July — the
+    // day Stage 1's hand-entered figure claimed — and a count is the last word
+    // for its own day, so a 1 July figure cannot open July. The corpus puts
+    // the checkpoint on 30 June for exactly that reason; see the note beside
+    // OPENING_COUNTED_AT.
+    const ledger = reconcile(monthTotals(CORPUS_ROWS), {
+      amountMinor: OPENING.amountMinor,
+      asOf: OPENING_COUNTED_AT,
+    });
     assert.equal(balanceAt(MAIN_ID, CHECKPOINTS, MOVEMENTS, '2026-07-31').minor,
       ledger.months[0].closingMinor);
     assert.equal(balanceAt(MAIN_ID, CHECKPOINTS, MOVEMENTS, '2026-08-31').minor,

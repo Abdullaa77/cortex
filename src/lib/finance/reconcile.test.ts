@@ -82,7 +82,7 @@ describe('reconcile — with no opening balance', () => {
   test('an opening of exactly the required amount lands the trough on zero', () => {
     const exact = reconcile(months, {
       amountMinor: result.requiredOpeningMinor,
-      asOf: '2026-07-01',
+      asOf: '2026-06-30',
     });
     assert.equal(exact.months[0].closingMinor, 0);
     assert.deepEqual(exact.impossibleKeys, []);
@@ -90,7 +90,7 @@ describe('reconcile — with no opening balance', () => {
 });
 
 describe('reconcile — with an opening balance', () => {
-  const opening = { amountMinor: 8_000_000 * 100, asOf: '2026-07-01' };
+  const opening = { amountMinor: 8_000_000 * 100, asOf: '2026-06-30' };
   const result = reconcile(months, opening);
 
   test('the first month opens at the entered amount', () => {
@@ -137,7 +137,7 @@ describe('reconcile — the tolerance band', () => {
     // 1,200 so'm short — the exact case that gets an app closed for nagging.
     const nagging = reconcile(
       [{ ...two[0], spendMinor: 1_200 * 100 }],
-      { amountMinor: 0, asOf: '2026-07-01' }
+      { amountMinor: 0, asOf: '2026-06-30' }
     );
     assert.equal(nagging.months[0].closingMinor, -1_200 * 100);
     assert.equal(nagging.months[0].impossible, false);
@@ -147,13 +147,13 @@ describe('reconcile — the tolerance band', () => {
   test('exactly at the band is still silent; past it speaks', () => {
     const atBand = reconcile([{ ...two[0], spendMinor: TOLERANCE_MINOR }], {
       amountMinor: 0,
-      asOf: '2026-07-01',
+      asOf: '2026-06-30',
     });
     assert.equal(atBand.months[0].impossible, false);
 
     const past = reconcile([{ ...two[0], spendMinor: TOLERANCE_MINOR + 1 }], {
       amountMinor: 0,
-      asOf: '2026-07-01',
+      asOf: '2026-06-30',
     });
     assert.equal(past.months[0].impossible, true);
     assert.deepEqual(past.impossibleKeys, ['2026-07']);
@@ -165,7 +165,7 @@ describe('reconcile — the tolerance band', () => {
         { ...two[0], incomeMinor: 500_000 * 100 },
         { ...two[1], spendMinor: 900_000 * 100 },
       ],
-      { amountMinor: 100_000 * 100, asOf: '2026-07-01' }
+      { amountMinor: 100_000 * 100, asOf: '2026-06-30' }
     );
     assert.equal(result.months[0].impossible, false);
     assert.equal(result.months[1].impossible, true);
@@ -180,7 +180,7 @@ describe('reconcile — edges', () => {
   });
 
   test('no months still echoes the opening back', () => {
-    const opening = { amountMinor: 500, asOf: '2026-07-01' };
+    const opening = { amountMinor: 500, asOf: '2026-06-30' };
     assert.deepEqual(reconcile([], opening).opening, opening);
   });
 
@@ -189,7 +189,7 @@ describe('reconcile — edges', () => {
   });
 
   test('a zero opening balance is a real answer, not a missing one', () => {
-    const result = reconcile(months, { amountMinor: 0, asOf: '2026-07-01' });
+    const result = reconcile(months, { amountMinor: 0, asOf: '2026-06-30' });
     assert.equal(result.months[0].openingMinor, 0);
     assert.notEqual(result.months[0].closingMinor, null);
     assert.equal(result.months[0].impossible, true);
