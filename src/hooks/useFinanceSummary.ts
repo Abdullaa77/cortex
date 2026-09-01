@@ -108,10 +108,15 @@ export function useFinanceSummary() {
   /** Every count on one account, each with the gap it found, and the pattern. */
   const historyFor = useCallback(
     (accountId: string) => {
-      const ledger = checkpointLedger(accountId, accounts.checkpoints, movements);
+      const ledger = checkpointLedger(
+        accountId,
+        accounts.checkpoints,
+        movements,
+        accounts.settings.cutoverDate
+      );
       return { ledger, pattern: gapPattern(ledger) };
     },
-    [accounts.checkpoints, movements]
+    [accounts.checkpoints, movements, accounts.settings.cutoverDate]
   );
 
   /** Transfers still waiting on their other end. He knows; the machine does not. */

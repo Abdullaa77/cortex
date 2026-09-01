@@ -178,6 +178,15 @@ export function balanceAt(
 export type GapKind =
   /** The first count of this account. There is nothing to disagree with. */
   | 'opening'
+  /**
+   * A count taken ON the cutover date. Ground zero, not a reconciliation.
+   *
+   * Distinct from 'opening' because the account may well have a prior
+   * checkpoint — Main carries one, migrated from the opening balance 009 moved
+   * across — and yet the cutover count is still the first figure anybody is
+   * entitled to hold the ledger to. See `reconcileCount`.
+   */
+  | 'cutover'
   /** Counted matches derived. The story and the drawer agree. */
   | 'matched'
   /** gap < 0 — money left that was never logged. Expenses understated. */
@@ -215,14 +224,56 @@ export interface CountResult {
  * Existing checkpoints ON the counted day are ignored — a recount replaces the
  * count for that day, and measuring a figure against itself would report every
  * correction as a perfect match.
+ *
+ * TWO COUNTS ESTABLISH GROUND ZERO RATHER THAN RECONCILE, and both must come
+ * out with no gap and therefore no adjustment:
+ *
+ *   - THE FIRST COUNT OF AN ACCOUNT. There is nothing to disagree with. A
+ *     fresh account for mom or for his sister derives nothing at all, and a
+ *     gap measured against nothing would book the entire counted amount as
+ *     income that never arrived.
+ *
+ *   - ANY COUNT ON THE CUTOVER DATE, prior checkpoint or not. This is the case
+ *     the first rule does not cover and the one that would have done the
+ *     damage. Main already holds a checkpoint — the 1 July opening migration
+ *     009 carried across — so its cutover count HAS a basis, and that basis is
+ *     a figure derived from two months of reconstructed notes. Reconciling
+ *     against it would file the whole difference between the reconstruction
+ *     and the drawer as `unaccounted` spend dated on the cutover, and every
+ *     downstream figure — the everyday floor, both waterfalls, the month
+ *     totals — would carry millions of som of fiction into September.
+ *
+ *     The cutover screen states the rule in its own copy: everything before
+ *     the line is reference, "never expected to reconcile against a drawer".
+ *     A cutover count that wrote an adjustment would be the app disagreeing
+ *     with its own promise, in the ledger, permanently.
+ *
+ * Every count AFTER the cutover reconciles normally against its predecessor,
+ * which is the entire point of the feature and is untouched here.
  */
 export function reconcileCount(
   accountId: string,
   checkpoints: BalanceCheckpoint[],
   rows: MovementRow[],
   countedAt: string,
-  countedMinor: number
+  countedMinor: number,
+  cutoverDate: string | null = null
 ): CountResult {
+  // Asked BEFORE the basis lookup, deliberately. The whole hazard is an
+  // account that does have a basis and must not be measured against it.
+  // Falsy, not `!== null`, matching `isPreCutover`: an empty string is unset,
+  // not the year zero.
+  if (cutoverDate && countedAt === cutoverDate)
+    return {
+      accountId,
+      countedAt,
+      countedMinor,
+      derivedMinor: null,
+      gapMinor: null,
+      kind: 'cutover',
+      basis: null,
+    };
+
   const basis = basisCheckpoint(checkpoints, accountId, countedAt, 'before');
 
   if (!basis)
@@ -261,6 +312,8 @@ export function explainGap(result: CountResult): string {
   switch (result.kind) {
     case 'opening':
       return 'First count of this account. This is where it starts.';
+    case 'cutover':
+      return 'The cutover count. This is where the ledger starts being held to the drawer — nothing before it is reconciled.';
     case 'matched':
       return 'The count matches the ledger exactly.';
     case 'money-missing':
@@ -274,7 +327,8 @@ export function explainGap(result: CountResult): string {
  * The transaction a count writes to close its gap.
  *
  * Null when there is nothing to close: a first count has nothing to disagree
- * with, and a matched count has a gap of zero, which could not be written
+ * with, a cutover count is establishing ground zero rather than reconciling a
+ * period, and a matched count has a gap of zero, which could not be written
  * anyway — `transactions.amount_minor` carries CHECK (> 0), and a zero-som row
  * saying nothing happened would be noise in a list whose value is that every
  * line means something.
@@ -330,13 +384,25 @@ export function adjustmentDraft(result: CountResult): AdjustmentDraft | null {
 export function checkpointLedger(
   accountId: string,
   checkpoints: BalanceCheckpoint[],
-  rows: MovementRow[]
+  rows: MovementRow[],
+  cutoverDate: string | null = null
 ): CountResult[] {
   return checkpoints
     .filter((c) => c.account_id === accountId)
     .sort((a, b) => a.counted_at.localeCompare(b.counted_at))
     .map((c) =>
-      reconcileCount(accountId, checkpoints, rows, c.counted_at, c.counted_minor)
+      reconcileCount(
+        accountId,
+        checkpoints,
+        rows,
+        c.counted_at,
+        c.counted_minor,
+        // The same date the count was judged by when it was taken. Without it
+        // the history would re-derive the cutover count as a nine-million-som
+        // gap that no adjustment ever closed, and `gapPattern` would read that
+        // invented figure as evidence of a habit.
+        cutoverDate
+      )
     );
 }
 

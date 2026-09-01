@@ -531,3 +531,200 @@ describe('atLocalNoon', () => {
     }
   });
 });
+
+/**
+ * The cutover count, and why it must write nothing.
+ *
+ * The morning Scott counts, Main derives 9,983,001.61 from a 1 July opening
+ * plus two months of notes reconstructed after the fact, and the drawer holds
+ * a fraction of that. Mom's and his sister's accounts are new: they derive
+ * nothing, and hold a real amount.
+ *
+ * If the cutover count reconciled, September would open with millions of
+ * som of invented `unaccounted` spend on Main and invented income on the two
+ * new accounts, dated on the line — and the everyday floor, both waterfalls
+ * and every month total would carry that fiction forward permanently.
+ *
+ * The cutover screen already says the rule out loud: everything before the
+ * line is reference, "never expected to reconcile against a drawer".
+ */
+describe('the cutover count establishes ground zero and writes nothing', () => {
+  const CUTOVER = '2026-09-01';
+
+  // Main, as Scott will actually find it. The 1 July checkpoint is real — 009
+  // migrated it out of finance_opening_balance — so this account HAS a basis,
+  // which is exactly what makes it the dangerous case.
+  const MAIN_OPENING = count('2026-07-01', 8_000_000_00, MAIN_ID);
+  const RECONSTRUCTED = [
+    move('2026-07-15', 4_625_000_00, null, MAIN_ID),
+    move('2026-08-20', 2_641_998_39, MAIN_ID, null),
+  ];
+  // 8,000,000.00 + 4,625,000.00 − 2,641,998.39 = 9,983,001.61
+  const DERIVED_MAIN = 9_983_001_61;
+  const REAL_MAIN = 2_150_000_00;
+
+  test('the reconstructed derivation really is the millions-out figure', () => {
+    // Pinned so the rest of this block is testing the case it claims to be.
+    const derived = balanceAt(MAIN_ID, [MAIN_OPENING], RECONSTRUCTED, CUTOVER);
+    assert.equal(derived.minor, DERIVED_MAIN);
+    assert.ok(derived.minor! - REAL_MAIN > 7_000_000_00);
+  });
+
+  test('an account WITH a prior checkpoint writes nothing on the cutover date', () => {
+    const r = reconcileCount(
+      MAIN_ID,
+      [MAIN_OPENING],
+      RECONSTRUCTED,
+      CUTOVER,
+      REAL_MAIN,
+      CUTOVER
+    );
+    assert.equal(r.kind, 'cutover');
+    assert.equal(r.derivedMinor, null);
+    assert.equal(r.gapMinor, null);
+    assert.equal(r.basis, null, 'the 1 July opening must not be used as a basis');
+    assert.equal(adjustmentDraft(r), null);
+  });
+
+  test('without the cutover date that same count books millions of fiction', () => {
+    // The bug, stated as a test so the fix cannot be silently undone: it is
+    // the cutover date doing the work, not an accident of the fixtures.
+    const r = reconcileCount(MAIN_ID, [MAIN_OPENING], RECONSTRUCTED, CUTOVER, REAL_MAIN);
+    assert.equal(r.kind, 'money-missing');
+    assert.equal(r.gapMinor, REAL_MAIN - DERIVED_MAIN);
+    const d = adjustmentDraft(r)!;
+    assert.equal(d.amount_minor, DERIVED_MAIN - REAL_MAIN);
+    assert.equal(d.category_slug, UNACCOUNTED_SLUG);
+  });
+
+  test("a fresh account — mom's, his sister's — writes nothing either way", () => {
+    const MOM = 'acct-mom-new';
+    const REAL_MOM = 3_400_000_00;
+
+    // On the cutover date.
+    const onLine = reconcileCount(MOM, [], RECONSTRUCTED, CUTOVER, REAL_MOM, CUTOVER);
+    assert.equal(onLine.kind, 'cutover');
+    assert.equal(adjustmentDraft(onLine), null);
+
+    // And on any other day, because it is still the first count of it. This is
+    // the rule that already held, pinned so it stays held.
+    const offLine = reconcileCount(MOM, [], RECONSTRUCTED, '2026-09-04', REAL_MOM, CUTOVER);
+    assert.equal(offLine.kind, 'opening');
+    assert.equal(offLine.gapMinor, null);
+    assert.equal(adjustmentDraft(offLine), null);
+  });
+
+  test('a fresh account never books its whole counted amount as income', () => {
+    // The specific fiction: derived nothing, counted 3,400,000, so a naive gap
+    // would be +3,400,000 of income that never arrived.
+    for (const day of [CUTOVER, '2026-09-04']) {
+      const d = adjustmentDraft(
+        reconcileCount('acct-sister-new', [], [], day, 3_400_000_00, CUTOVER)
+      );
+      assert.equal(d, null, `${day} wrote an adjustment`);
+    }
+  });
+
+  /**
+   * The other half, and the one that must not regress. Suppressing the cutover
+   * count is only safe if every count after it still reconciles — otherwise
+   * the fix has traded fictional gaps for invisible real ones.
+   */
+  test('the SECOND count, a week later, adjusts normally', () => {
+    const cutoverCount = count(CUTOVER, REAL_MAIN, MAIN_ID);
+    const checkpoints = [MAIN_OPENING, cutoverCount];
+    // A week of real, post-cutover rows: 900,000 out, 200,000 in.
+    const week = [
+      ...RECONSTRUCTED,
+      move('2026-09-03', 900_000_00, MAIN_ID, null),
+      move('2026-09-05', 200_000_00, null, MAIN_ID),
+    ];
+    // 2,150,000 − 900,000 + 200,000 = 1,450,000 derived. He finds 1,400,000.
+    const r = reconcileCount(MAIN_ID, checkpoints, week, '2026-09-08', 1_400_000_00, CUTOVER);
+
+    assert.equal(r.kind, 'money-missing');
+    assert.equal(r.derivedMinor, 1_450_000_00);
+    assert.equal(r.gapMinor, -50_000_00);
+    assert.equal(r.basis?.counted_at, CUTOVER, 'measured from the cutover count');
+
+    const d = adjustmentDraft(r)!;
+    assert.equal(d.amount_minor, 50_000_00);
+    assert.equal(d.direction, 'expense');
+    assert.equal(d.from_account_id, MAIN_ID);
+    assert.equal(dayKey(d.occurred_at), '2026-09-08');
+    assert.equal(d.category_slug, UNACCOUNTED_SLUG);
+  });
+
+  test('the pre-cutover rows never reach the second count', () => {
+    // A count supersedes its whole day, so the reconstructed July and August
+    // rows sit behind the cutover checkpoint and cannot move the September
+    // gap. The cutover is the line; this is what the line does.
+    const checkpoints = [MAIN_OPENING, count(CUTOVER, REAL_MAIN, MAIN_ID)];
+    const withNoise = [...RECONSTRUCTED, move('2026-09-03', 900_000_00, MAIN_ID, null)];
+    const bare = [move('2026-09-03', 900_000_00, MAIN_ID, null)];
+
+    assert.deepEqual(
+      reconcileCount(MAIN_ID, checkpoints, withNoise, '2026-09-08', 1_250_000_00, CUTOVER),
+      reconcileCount(MAIN_ID, checkpoints, bare, '2026-09-08', 1_250_000_00, CUTOVER)
+    );
+  });
+
+  test('the history re-derives the cutover count as a cutover, not as a leak', () => {
+    // Re-deriving it without the line would show Scott a 7.8 million gap that
+    // no adjustment ever closed, and gapPattern would read the invented figure
+    // as evidence of a habit.
+    const checkpoints = [
+      MAIN_OPENING,
+      count(CUTOVER, REAL_MAIN, MAIN_ID),
+      count('2026-09-08', 1_400_000_00, MAIN_ID),
+    ];
+    const rows = [
+      ...RECONSTRUCTED,
+      move('2026-09-03', 900_000_00, MAIN_ID, null),
+      move('2026-09-05', 200_000_00, null, MAIN_ID),
+    ];
+
+    const ledger = checkpointLedger(MAIN_ID, checkpoints, rows, CUTOVER);
+    assert.deepEqual(
+      ledger.map((r) => r.kind),
+      ['opening', 'cutover', 'money-missing']
+    );
+
+    const p = gapPattern(ledger);
+    assert.equal(p.gapCount, 1, 'only the real September gap counts');
+    assert.equal(p.netMinor, -50_000_00);
+  });
+
+  test('a count on an ordinary day is untouched by the cutover being set', () => {
+    const checkpoints = [count('2026-09-01', 100_000)];
+    const rows = [move('2026-09-05', 30_000, A, null)];
+    assert.deepEqual(
+      reconcileCount(A, checkpoints, rows, '2026-09-10', 65_000, '2026-09-01'),
+      reconcileCount(A, checkpoints, rows, '2026-09-10', 65_000)
+    );
+  });
+
+  test('no cutover date set means nothing is suppressed', () => {
+    // The default is that the whole ledger is truth — isPreCutover's rule.
+    const r = reconcileCount(MAIN_ID, [MAIN_OPENING], RECONSTRUCTED, CUTOVER, REAL_MAIN, null);
+    assert.equal(r.kind, 'money-missing');
+    assert.ok(adjustmentDraft(r));
+  });
+
+  test('the cutover count is a real basis for what follows it', () => {
+    // Writing no adjustment must not mean writing nothing. The checkpoint is
+    // still the figure every later count and every position is measured from.
+    const checkpoints = [MAIN_OPENING, count(CUTOVER, REAL_MAIN, MAIN_ID)];
+    const after = [...RECONSTRUCTED, move('2026-09-03', 150_000_00, MAIN_ID, null)];
+    const pos = balanceAt(MAIN_ID, checkpoints, after, '2026-09-10');
+    assert.equal(pos.minor, REAL_MAIN - 150_000_00);
+    assert.equal(pos.basis?.counted_at, CUTOVER);
+  });
+
+  test('it says what it is, in words, and not the same words as an opening', () => {
+    const cut = reconcileCount(MAIN_ID, [MAIN_OPENING], [], CUTOVER, REAL_MAIN, CUTOVER);
+    const open = reconcileCount('acct-new', [], [], '2026-09-04', REAL_MAIN, CUTOVER);
+    assert.match(explainGap(cut), /cutover/i);
+    assert.notEqual(explainGap(cut), explainGap(open));
+  });
+});

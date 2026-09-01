@@ -167,6 +167,7 @@ export default function FinancePage() {
             account={accounts.accounts.find((a) => a.id === countingId) ?? null}
             checkpoints={accounts.checkpoints}
             movements={movements}
+            cutoverDate={accounts.settings.cutoverDate}
             history={historyFor(countingId ?? '')}
             onClose={() => setCountingId(null)}
             onSave={({ countedAt, countedMinor, note }) =>
@@ -404,6 +405,7 @@ export default function FinancePage() {
         account={accounts.accounts.find((a) => a.id === countingId) ?? null}
         checkpoints={accounts.checkpoints}
         movements={movements}
+        cutoverDate={accounts.settings.cutoverDate}
         history={historyFor(countingId ?? '')}
         onClose={() => setCountingId(null)}
         onSave={({ countedAt, countedMinor, note }) =>

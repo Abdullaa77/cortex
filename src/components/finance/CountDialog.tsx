@@ -19,6 +19,13 @@ interface CountDialogProps {
   account: AccountRecord | null;
   checkpoints: BalanceCheckpoint[];
   movements: MovementRow[];
+  /**
+   * The line. A count dated on it is establishing ground zero, not
+   * reconciling a period, so the preview must be asked the same question the
+   * write path will ask — otherwise the screen promises an adjustment that
+   * never gets written, or stays silent about one that does.
+   */
+  cutoverDate: string | null;
   history: { ledger: CountResult[]; pattern: GapPattern };
   onClose: () => void;
   onSave: (input: {
@@ -47,6 +54,7 @@ export default function CountDialog({
   account,
   checkpoints,
   movements,
+  cutoverDate,
   history,
   onClose,
   onSave,
@@ -65,8 +73,15 @@ export default function CountDialog({
 
   const preview = useMemo(() => {
     if (!account || countedMinor === null) return null;
-    return reconcileCount(account.id, checkpoints, movements, countedAt, countedMinor);
-  }, [account, checkpoints, movements, countedAt, countedMinor]);
+    return reconcileCount(
+      account.id,
+      checkpoints,
+      movements,
+      countedAt,
+      countedMinor,
+      cutoverDate
+    );
+  }, [account, checkpoints, movements, countedAt, countedMinor, cutoverDate]);
 
   if (!account) return null;
 
@@ -167,13 +182,14 @@ function GapPreview({
   result: CountResult;
   account: AccountRecord;
 }) {
-  if (result.kind === 'opening')
+  if (result.kind === 'opening' || result.kind === 'cutover')
     return (
       <div className="rounded border border-accent/20 bg-accent/[0.03] px-2.5 py-2">
         <p className="font-mono text-[11px] leading-relaxed text-text-muted">
-          {explainGap(result)} Nothing to reconcile against — this becomes{' '}
-          {account.name}&apos;s opening balance, and everything after it is measured
-          from here.
+          {explainGap(result)}{' '}
+          {result.kind === 'opening'
+            ? `Nothing to reconcile against — this becomes ${account.name}'s opening balance, and everything after it is measured from here.`
+            : `Whatever the reconstructed notes derive for ${account.name} is reference, not a claim about this drawer. Nothing is written beyond the count itself, and the next count is measured from here.`}
         </p>
       </div>
     );
@@ -293,7 +309,9 @@ function History({
                 }}
               >
                 {r.gapMinor === null
-                  ? 'opening'
+                  ? r.kind === 'cutover'
+                    ? 'cutover'
+                    : 'opening'
                   : r.gapMinor === 0
                     ? 'matched'
                     : `${r.gapMinor < 0 ? '-' : '+'}${formatMinor(Math.abs(r.gapMinor))}`}

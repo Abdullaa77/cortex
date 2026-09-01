@@ -325,12 +325,16 @@ export function useAccounts() {
         ? input.movements.filter((m) => m.id !== superseded)
         : input.movements;
 
+      // The cutover date decides whether this count reconciles at all. A count
+      // taken on the line is ground zero and writes no adjustment, however far
+      // the reconstructed ledger has drifted from the drawer.
       const result = reconcileCount(
         input.accountId,
         checkpoints,
         movements,
         input.countedAt,
-        input.countedMinor
+        input.countedMinor,
+        settings.cutoverDate
       );
       const draft = adjustmentDraft(result);
       const account = accounts.find((a) => a.id === input.accountId);
@@ -404,7 +408,7 @@ export function useAccounts() {
       ]);
       return null;
     },
-    [supabase, userId, checkpoints, accounts]
+    [supabase, userId, checkpoints, accounts, settings.cutoverDate]
   );
 
   /**
