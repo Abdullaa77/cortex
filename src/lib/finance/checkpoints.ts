@@ -450,3 +450,130 @@ export function gapPattern(ledger: CountResult[]): GapPattern {
     kind: allNegative ? 'money-missing' : allPositive ? 'money-appeared' : 'mixed',
   };
 }
+
+/**
+ * The line this count is judged against, and whether the count is drawing it.
+ *
+ * A MAN COUNTING EVERY DRAWER HE OWNS IS DRAWING A LINE. That is the whole
+ * rule. There are two ways to reach a count — the wizard at /finance/cutover,
+ * which sets the date at step 0, and the `count` button on PositionsCard,
+ * which does not — and only one of them ever established the cutover. So a
+ * count taken with no line set draws it, at its own day.
+ *
+ * WHY THIS RATHER THAN A REFUSAL. Requiring Scott to find a wizard before the
+ * app will accept a physical count is ceremony charged for the app's own
+ * bookkeeping. And the alternative is worse than ceremony: with no line set,
+ * the old code reconciled a first count against a MIGRATED OPENING BALANCE —
+ * a figure derived from two months of notes reconstructed after the fact — and
+ * filed the difference as spending that never happened. Thirteen counts, one
+ * evening, 3,488,123.87 so'm of fiction, on the night the ledger was supposed
+ * to become trustworthy.
+ *
+ * IT IS ANNOUNCED, NEVER INFERRED SILENTLY. `establishes` exists so the screen
+ * can say what is about to happen before it happens — CountDialog renders it,
+ * and the write path persists the date rather than leaving it to be re-derived.
+ * A setting whose absence quietly changes behaviour is the defect being fixed
+ * here; replacing it with a different silent behaviour would fix nothing.
+ *
+ * Once persisted the rule stops applying: every later count sees a date, and
+ * only one taken ON it is ground zero. Two counts on the same evening both
+ * reach this with no date set and both name the same day, so the order they
+ * are saved in cannot change the answer.
+ */
+export function cutoverLineFor(
+  countedAt: string,
+  cutoverDate: string | null
+): { cutoverDate: string; establishes: boolean } {
+  // Falsy, not `!== null`, matching `isPreCutover`: an empty string is unset,
+  // not the year zero.
+  if (cutoverDate) return { cutoverDate, establishes: false };
+  return { cutoverDate: countedAt, establishes: true };
+}
+
+/**
+ * Everything a recorded count decides, before anything is written.
+ *
+ * THE SPLIT EXISTS BECAUSE OF WHAT WENT WRONG. `reconcileCount` was tested to
+ * death — including the case that says, in as many words, that a cutover count
+ * taken without the date books millions of fiction — and the fiction was
+ * booked anyway, thirteen times, because the DATE WAS NEVER SET. The suite
+ * could not see it: every assertion passed the date in by hand, and the one
+ * thing that actually varied in production was the one thing no test supplied.
+ *
+ * So the decision the write path makes now lives here, whole, with the two
+ * pieces that used to sit inside a React hook and could not be run without a
+ * browser: which rows the gap is measured against, and which adjustment the
+ * count replaces. `useAccounts.recordCount` is now I/O around this and nothing
+ * else, which is what lets a test take the path the button takes.
+ */
+export interface CountPlan {
+  /**
+   * The date to write to `finance_settings.cutover_date`, when this count is
+   * the one drawing the line. Null when a line was already set.
+   *
+   * The caller MUST persist it. Left unwritten, the next count would find no
+   * line again and draw a second one at its own day, and the first count's
+   * suppression would look like a bug rather than a decision.
+   */
+  establishesLine: string | null;
+  /**
+   * The adjustment written by the count this one supersedes, if there was one.
+   *
+   * Re-counting a day that has already been counted supersedes it, and that
+   * has to include the adjustment the first count wrote. Left in, that row is
+   * part of the movements the new gap is measured against, so the second count
+   * writes a small correction on top of the first — arithmetically right, and
+   * a ledger with two Unaccounted rows for one drawer on one afternoon, one of
+   * which describes a count that no longer exists. One count, one adjustment.
+   */
+  supersededAdjustmentId: string | null;
+  /** The rows the gap is measured against, with that superseded row removed. */
+  movements: MovementRow[];
+  result: CountResult;
+  /** The adjustment to write. Null when there is nothing to close. */
+  draft: AdjustmentDraft | null;
+}
+
+export function planCount(input: {
+  accountId: string;
+  countedAt: string;
+  countedMinor: number;
+  checkpoints: BalanceCheckpoint[];
+  movements: MovementRow[];
+  /**
+   * The line. NOT optional and with no default, deliberately: a default of
+   * null here is exactly the shape of the bug — a caller that forgets it gets
+   * silently told there is no cutover, and a count on the line reconciles
+   * against two months of reconstructed notes. Making it required means
+   * forgetting is a type error rather than a ledger entry.
+   */
+  cutoverDate: string | null;
+}): CountPlan {
+  const line = cutoverLineFor(input.countedAt, input.cutoverDate);
+
+  const supersededAdjustmentId =
+    input.checkpoints.find(
+      (c) => c.account_id === input.accountId && c.counted_at === input.countedAt
+    )?.adjustment_transaction_id ?? null;
+
+  const movements = supersededAdjustmentId
+    ? input.movements.filter((m) => m.id !== supersededAdjustmentId)
+    : input.movements;
+
+  const result = reconcileCount(
+    input.accountId,
+    input.checkpoints,
+    movements,
+    input.countedAt,
+    input.countedMinor,
+    line.cutoverDate
+  );
+
+  return {
+    establishesLine: line.establishes ? line.cutoverDate : null,
+    supersededAdjustmentId,
+    movements,
+    result,
+    draft: adjustmentDraft(result),
+  };
+}

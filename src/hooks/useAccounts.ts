@@ -11,8 +11,7 @@ import {
   type AccountRecord,
 } from '@/lib/finance/accounts';
 import {
-  adjustmentDraft,
-  reconcileCount,
+  planCount,
   UNACCOUNTED_SLUG,
   type BalanceCheckpoint,
   type MovementRow,
@@ -304,41 +303,32 @@ export function useAccounts() {
     }): Promise<string | null> => {
       if (!userId) return 'Not signed in.';
 
-      /**
-       * Re-counting a day that has already been counted supersedes it, and
-       * that has to include the adjustment the first count wrote.
-       *
-       * Left in, that row is part of the movements the new gap is measured
-       * against, so the second count writes a small correction on top of the
-       * first — arithmetically right, and a ledger with two Unaccounted rows
-       * for one drawer on one afternoon, one of which describes a count that
-       * no longer exists. One count, one adjustment. The superseded row is
-       * excluded from the derivation here and deleted once its replacement is
-       * safely written.
-       */
-      const superseded =
-        checkpoints.find(
-          (c) => c.account_id === input.accountId && c.counted_at === input.countedAt
-        )?.adjustment_transaction_id ?? null;
-
-      const movements = superseded
-        ? input.movements.filter((m) => m.id !== superseded)
-        : input.movements;
-
-      // The cutover date decides whether this count reconciles at all. A count
-      // taken on the line is ground zero and writes no adjustment, however far
-      // the reconstructed ledger has drifted from the drawer.
-      const result = reconcileCount(
-        input.accountId,
+      // Every decision this count makes, made in one pure place so a test can
+      // take exactly this path. `planCount` handles the superseded adjustment,
+      // the rows the gap is measured against, and — the one that cost 3.5M of
+      // fiction — whether the cutover suppresses the reconciliation at all.
+      const plan = planCount({
+        accountId: input.accountId,
+        countedAt: input.countedAt,
+        countedMinor: input.countedMinor,
         checkpoints,
-        movements,
-        input.countedAt,
-        input.countedMinor,
-        settings.cutoverDate
-      );
-      const draft = adjustmentDraft(result);
+        movements: input.movements,
+        cutoverDate: settings.cutoverDate,
+      });
+      const { supersededAdjustmentId: superseded, draft } = plan;
+
       const account = accounts.find((a) => a.id === input.accountId);
       if (!account) return 'That account is no longer here.';
+
+      // FIRST, and the count fails if it fails. This count is drawing the
+      // cutover, and a line that is decided but never written is worse than no
+      // line at all: the next count would find none, draw a second one at its
+      // own day, and this count's suppression would read as a bug. Nothing
+      // else has been written yet, so failing here leaves the ledger untouched.
+      if (plan.establishesLine) {
+        const lineErr = await saveSettings({ cutoverDate: plan.establishesLine });
+        if (lineErr) return `Could not set the cutover date, so the count was not saved. ${lineErr}`;
+      }
 
       let adjustmentId: string | null = null;
 
@@ -408,7 +398,7 @@ export function useAccounts() {
       ]);
       return null;
     },
-    [supabase, userId, checkpoints, accounts, settings.cutoverDate]
+    [supabase, userId, checkpoints, accounts, settings.cutoverDate, saveSettings]
   );
 
   /**

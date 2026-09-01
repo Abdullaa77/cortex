@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import Modal from '@/components/ui/Modal';
 import { formatAmount, formatMinor } from '@/lib/finance/format';
 import {
-  reconcileCount,
+  planCount,
   explainGap,
   type CountResult,
   type MovementRow,
@@ -71,16 +71,19 @@ export default function CountDialog({
     return Number.isFinite(major) && amount.trim() !== '' ? Math.round(major * 100) : null;
   }, [amount]);
 
+  // The PLAN, not the pure comparison underneath it. The preview and the write
+  // path now ask one function the same question, so the screen cannot promise
+  // an adjustment that never gets written or stay quiet about one that does.
   const preview = useMemo(() => {
     if (!account || countedMinor === null) return null;
-    return reconcileCount(
-      account.id,
-      checkpoints,
-      movements,
+    return planCount({
+      accountId: account.id,
       countedAt,
       countedMinor,
-      cutoverDate
-    );
+      checkpoints,
+      movements,
+      cutoverDate,
+    });
   }, [account, checkpoints, movements, countedAt, countedMinor, cutoverDate]);
 
   if (!account) return null;
@@ -132,7 +135,13 @@ export default function CountDialog({
           />
         </div>
 
-        {preview && <GapPreview result={preview} account={account} />}
+        {preview && (
+          <GapPreview
+            result={preview.result}
+            establishesLine={preview.establishesLine}
+            account={account}
+          />
+        )}
 
         <input
           value={note}
@@ -177,11 +186,39 @@ export default function CountDialog({
 
 function GapPreview({
   result,
+  establishesLine,
   account,
 }: {
   result: CountResult;
+  /** The day this count is about to draw the line at, when no line is set. */
+  establishesLine: string | null;
   account: AccountRecord;
 }) {
+  /**
+   * SAID OUT LOUD, BEFORE IT HAPPENS.
+   *
+   * There are two ways to reach this dialog and only one of them — the wizard —
+   * ever set a cutover date. So a count taken from the positions card draws the
+   * line itself, and this is the sentence that makes that a decision Scott took
+   * rather than something the app did behind him. The night it was missing cost
+   * 3,488,123.87 so'm of fictional September spending.
+   */
+  if (establishesLine)
+    return (
+      <div className="rounded border border-accent/40 bg-accent/[0.06] px-2.5 py-2">
+        <p className="font-mono text-[11px] leading-relaxed text-text-primary">
+          No cutover is set yet, so saving this draws the line at{' '}
+          <span className="text-accent">{establishesLine}</span>.
+        </p>
+        <p className="mt-1 font-mono text-[10px] leading-relaxed text-text-muted">
+          Everything before it becomes reference — real, kept, still shown, and never
+          expected to reconcile against a drawer. Nothing is written beyond the count
+          itself: no gap, no adjustment, however far the earlier notes have drifted.
+          Counts from here on are measured against this one.
+        </p>
+      </div>
+    );
+
   if (result.kind === 'opening' || result.kind === 'cutover')
     return (
       <div className="rounded border border-accent/20 bg-accent/[0.03] px-2.5 py-2">
