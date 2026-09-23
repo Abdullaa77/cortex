@@ -41,6 +41,8 @@ export interface CheckValues {
   window_minutes?: number;
   requests?: number;
   errors_5xx?: number;
+  /** Control runs only: the 4xx count --simulate-stale substitutes, under its own name. */
+  errors_4xx?: number;
 }
 
 export interface Check {
@@ -237,6 +239,7 @@ const VALUE_KEYS: Record<keyof CheckValues, 'sha' | 'iso' | 'int' | 'text'> = {
   window_minutes: 'int',
   requests: 'int',
   errors_5xx: 'int',
+  errors_4xx: 'int',
 };
 
 function check(c: Collector, p: string, x: unknown) {
