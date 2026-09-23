@@ -16,6 +16,7 @@ import LoadingState from '@/components/ui/LoadingState';
 import EmptyState from '@/components/ui/EmptyState';
 import type { Task } from '@/lib/types';
 import Link from 'next/link';
+import OpsLine from '@/components/ops/OpsLine';
 
 export default function TerminalPage() {
   const { loading: tasksLoading, completeTask, togglePin, updateTask, deleteTask, createTask, getTodayTasks } = useTasks();
@@ -48,6 +49,8 @@ export default function TerminalPage() {
   return (
     <AppShell>
       <div className="mx-auto max-w-3xl p-4 pb-8 lg:px-10 lg:py-6 page-enter">
+        <OpsLine />
+
         {/* TODAY section */}
         <SectionHeader title="TODAY" count={todayTasks.length > 0 ? `${stats.todayCompleted}/${todayTasks.length} done` : undefined} />
 

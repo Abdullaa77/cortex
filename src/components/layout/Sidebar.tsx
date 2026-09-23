@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
+  Activity,
   Home,
   Inbox,
   FolderKanban,
@@ -31,6 +32,7 @@ const navItems = [
   { href: '/finance', label: 'Finance', icon: Wallet },
   { href: '/finance/transactions', label: 'Transactions', icon: Receipt },
   { href: '/review', label: 'Review', icon: CalendarCheck },
+  { href: '/ops', label: 'Ops', icon: Activity },
 ];
 
 export default function Sidebar({ inboxCount, reviewDue, disciplinePercent }: SidebarProps) {
