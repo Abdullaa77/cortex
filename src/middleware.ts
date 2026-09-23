@@ -20,8 +20,13 @@ export const config = {
      *   secret, and scripts/check-deployed.mjs has no session to offer — a
      *   redirect to /login here would make "what is deployed" unanswerable,
      *   which is the question that cost a day)
+     * - api/ops/ingest (the Command Centre's write door. Its callers are
+     *   scripts with a bearer token and no session; the token is checked in
+     *   the database by ops_ingest, migration 013)
+     * - unreachable (says the database did not answer. It must render
+     *   without a session, because the session is what could not be checked)
      * - public assets (svg, png, jpg, etc.)
      */
-    '/((?!_next/static|_next/image|favicon.ico|manifest.json|sw.js|offline|api/version|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|manifest.json|sw.js|offline|unreachable|api/version|api/ops/ingest|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 };
