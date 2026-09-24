@@ -239,8 +239,8 @@ describe('014: intents kind + widened forbidden key', () => {
     assert.equal(await count(`run_id = '${env.run_id}'`), 1);
   });
 
-  test('cwd and transcript_path are refused at any depth, by name', async () => {
-    for (const k of ['cwd', 'transcript_path']) {
+  test('cwd, transcript_path and tool_input are refused at any depth, by name', async () => {
+    for (const k of ['cwd', 'transcript_path', 'tool_input']) {
       const env = envelope({}, { checks: [{ [k]: 'x' }] });
       const r = await ingest(TOKEN, env);
       assert.equal(r.error, 'forbidden_key', k);

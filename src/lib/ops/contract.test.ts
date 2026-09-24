@@ -166,39 +166,105 @@ describe('contract v1, 2026-09-24 additions — kind: intent_request', () => {
   const valid = () =>
     envelopeOf('intent_request', {
       session_id: 'sess-abc123',
+      trigger: 'notification',
       notification_type: 'agent_needs_input',
       question: 'merge admin-ui!145 now or after !402 deploys?',
       asked_at: '2026-09-24T10:00:00Z',
       repo: 'main-backend',
     });
 
-  test('a fully-populated intent_request is accepted, and a minimal one (session_id + asked_at only) is too', () => {
+  const permission = () =>
+    envelopeOf('intent_request', {
+      session_id: 'sess-abc123',
+      trigger: 'permission_request',
+      tool_name: 'Bash',
+      action: 'curl -s -o /dev/null https://example.com/probe-cd34',
+      description: 'Probe example.com endpoint silently',
+      asked_at: '2026-09-24T10:00:00Z',
+      repo: 'cortex',
+    });
+
+  test('a fully-populated notification and a fully-populated permission_request are both accepted; a minimal one (session_id + trigger + asked_at only) is too', () => {
     assert.deepEqual(errorsOf(valid()), []);
-    assert.deepEqual(errorsOf(envelopeOf('intent_request', { session_id: 'sess-1', asked_at: '2026-09-24T10:00:00Z' })), []);
+    assert.deepEqual(errorsOf(permission()), []);
+    assert.deepEqual(
+      errorsOf(envelopeOf('intent_request', { session_id: 'sess-1', trigger: 'notification', asked_at: '2026-09-24T10:00:00Z' })),
+      []
+    );
   });
 
-  test('session_id and asked_at are required', () => {
+  test('session_id, trigger and asked_at are required', () => {
     assert.deepEqual(errorsOf(envelopeOf('intent_request', {})), [
       '$.payload.session_id: required',
+      '$.payload.trigger: required',
       '$.payload.asked_at: required',
     ]);
   });
 
-  test('session_id and notification_type reject characters outside their pattern', () => {
+  test('session_id, notification_type and tool_name reject characters outside their pattern', () => {
     const bad1 = valid();
     (bad1.payload as Record<string, unknown>).session_id = 'has a space';
     assert.deepEqual(errorsOf(bad1), ['$.payload.session_id: does not match /^[A-Za-z0-9_-]+$/']);
     const bad2 = valid();
     (bad2.payload as Record<string, unknown>).notification_type = 'HasCaps';
     assert.deepEqual(errorsOf(bad2), ['$.payload.notification_type: does not match /^[a-z_]+$/']);
+    const bad3 = permission();
+    (bad3.payload as Record<string, unknown>).tool_name = 'has a space';
+    assert.deepEqual(errorsOf(bad3), ['$.payload.tool_name: does not match /^[A-Za-z0-9_.:-]+$/']);
   });
 
   test('question over 240 is refused; question_truncated without a question is refused', () => {
     const long = valid();
     (long.payload as Record<string, unknown>).question = 'x'.repeat(241);
     assert.deepEqual(errorsOf(long), ['$.payload.question: longer than 240']);
-    const orphan = envelopeOf('intent_request', { session_id: 'sess-1', asked_at: '2026-09-24T10:00:00Z', question_truncated: true });
+    const orphan = envelopeOf('intent_request', {
+      session_id: 'sess-1',
+      trigger: 'notification',
+      asked_at: '2026-09-24T10:00:00Z',
+      question_truncated: true,
+    });
     assert.deepEqual(errorsOf(orphan), ['$.payload.question_truncated: set without question']);
+  });
+
+  test('action over 240 is refused; action_truncated without an action is refused', () => {
+    const long = permission();
+    (long.payload as Record<string, unknown>).action = 'x'.repeat(241);
+    assert.deepEqual(errorsOf(long), ['$.payload.action: longer than 240']);
+    const orphan = envelopeOf('intent_request', {
+      session_id: 'sess-1',
+      trigger: 'permission_request',
+      tool_name: 'Bash',
+      asked_at: '2026-09-24T10:00:00Z',
+      action_truncated: true,
+    });
+    assert.deepEqual(errorsOf(orphan), ['$.payload.action_truncated: set without action']);
+  });
+
+  test('description over 240 is refused; description_truncated without a description is refused', () => {
+    const long = permission();
+    (long.payload as Record<string, unknown>).description = 'x'.repeat(241);
+    assert.deepEqual(errorsOf(long), ['$.payload.description: longer than 240']);
+    const orphan = envelopeOf('intent_request', {
+      session_id: 'sess-1',
+      trigger: 'permission_request',
+      tool_name: 'Bash',
+      asked_at: '2026-09-24T10:00:00Z',
+      description_truncated: true,
+    });
+    assert.deepEqual(errorsOf(orphan), ['$.payload.description_truncated: set without description']);
+  });
+
+  test('cross-combination: permission_request-only fields are refused on trigger=notification, and vice versa (aeb9adf)', () => {
+    const crossed = valid();
+    (crossed.payload as Record<string, unknown>).tool_name = 'Bash';
+    (crossed.payload as Record<string, unknown>).action = 'ls';
+    assert.deepEqual(errorsOf(crossed), [
+      '$.payload.tool_name: forbidden unless trigger=permission_request',
+      '$.payload.action: forbidden unless trigger=permission_request',
+    ]);
+    const reversed = permission();
+    (reversed.payload as Record<string, unknown>).notification_type = 'agent_needs_input';
+    assert.deepEqual(errorsOf(reversed), ['$.payload.notification_type: forbidden unless trigger=notification']);
   });
 
   test('cwd is forbidden at any depth, alongside the existing list', () => {
@@ -211,6 +277,12 @@ describe('contract v1, 2026-09-24 additions — kind: intent_request', () => {
     const e = valid();
     (e.payload as Record<string, unknown>).transcript_path = '/tmp/claude/transcript.jsonl';
     assert.deepEqual(errorsOf(e), ['$.payload.transcript_path: forbidden key']);
+  });
+
+  test('tool_input is forbidden at any depth — the raw payload never leaves the box, only the projected action does', () => {
+    const e = permission();
+    (e.payload as Record<string, unknown>).tool_input = { command: 'curl -s -o /dev/null https://example.com/probe-cd34' };
+    assert.deepEqual(errorsOf(e), ['$.payload.tool_input: forbidden key']);
   });
 
   test('producer.name "intent-hook" is accepted for this kind', () => {

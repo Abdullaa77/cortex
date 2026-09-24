@@ -158,6 +158,7 @@ export const gitlabRun = (finishedMinAgo = 5): StoredRun<GitlabPayload> => ({
 
 export function intentRun(over: Partial<IntentRequestPayload> & { session_id: string }, askedMinAgo: number): StoredRun<IntentRequestPayload> {
   const payload: IntentRequestPayload = {
+    trigger: 'notification',
     asked_at: minutesAgo(askedMinAgo),
     ...over,
   };
