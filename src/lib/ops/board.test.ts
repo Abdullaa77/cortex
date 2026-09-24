@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { ACTION_WITHHELD, boardState, freshness, intentsBand, readyBand, rollup, waitingBand, type BoardInput } from './board.ts';
+import { ACTION_WITHHELD, boardState, deriveWaitState, freshness, intentsBand, readyBand, rollup, waitingBand, type BoardInput } from './board.ts';
 import { CONTROL_CHECKS, LIVE_CHECKS, NOW, GITLAB, WAVES, gitlabRun, intentRun, minutesAgo, sessionRun, wave, wavesRun } from './__fixtures__/runs.ts';
 
 const base = (over: Partial<BoardInput> = {}): BoardInput => ({
@@ -235,13 +235,15 @@ describe('blocked sessions — intents band 3', () => {
     const older = intentRun({ session_id: 'sess-1', question: 'older' }, 120);
     const newer = intentRun({ session_id: 'sess-2', question: 'newer' }, 5);
     const b = intentsBand([older, newer], NOW);
-    assert.deepEqual(b.items.map((i) => i.sessionId), ['sess-2', 'sess-1']);
+    // Both are legacy rows (no notification_type) → derived blocked.
+    assert.deepEqual(b.blocked.map((i) => i.sessionId), ['sess-2', 'sess-1']);
+    assert.deepEqual(b.idle, []);
   });
 
   test('capped at 50, with an exact "more" count', () => {
     const runs = Array.from({ length: 63 }, (_, i) => intentRun({ session_id: `sess-${i}` }, i));
     const b = intentsBand(runs, NOW);
-    assert.equal(b.items.length, 50);
+    assert.equal(b.blocked.length, 50);
     assert.equal(b.moreCount, 13);
   });
 
@@ -249,22 +251,22 @@ describe('blocked sessions — intents band 3', () => {
     const inWindow = intentRun({ session_id: 'in' }, 60);
     const outOfWindow = intentRun({ session_id: 'out' }, 25 * 60);
     const b = intentsBand([inWindow, outOfWindow], NOW);
-    assert.deepEqual(b.items.map((i) => i.sessionId), ['in']);
+    assert.deepEqual(b.blocked.map((i) => i.sessionId), ['in']);
     assert.equal(b.moreCount, 0);
   });
 
   test('notification: an omitted notification_type or repo renders the fixed fallback copy; question is null when absent', () => {
     const b = intentsBand([intentRun({ session_id: 'sess-1', trigger: 'notification' }, 5)], NOW);
-    assert.equal(b.items[0].question, null);
-    assert.equal(b.items[0].notificationWords, 'not tracked');
-    assert.equal(b.items[0].repo, 'repo not tracked');
+    assert.equal(b.blocked[0].question, null);
+    assert.equal(b.blocked[0].notificationWords, 'not tracked');
+    assert.equal(b.blocked[0].repo, 'repo not tracked');
   });
 
   test('notification: a known notification_type renders in words; an unknown one renders raw, not dropped', () => {
     const known = intentsBand([intentRun({ session_id: 's1', trigger: 'notification', notification_type: 'idle_prompt' }, 5)], NOW);
-    assert.equal(known.items[0].notificationWords, 'idle — waiting for input');
+    assert.equal(known.idle[0].notificationWords, 'idle — waiting for input');
     const unknown = intentsBand([intentRun({ session_id: 's2', trigger: 'notification', notification_type: 'brand_new_type' }, 5)], NOW);
-    assert.equal(unknown.items[0].notificationWords, 'brand_new_type');
+    assert.equal(unknown.blocked[0].notificationWords, 'brand_new_type');
   });
 
   test('permission_request: tool_name/action/description carry through; notification-only fields stay null', () => {
@@ -277,7 +279,7 @@ describe('blocked sessions — intents band 3', () => {
       ],
       NOW
     );
-    const [item] = b.items;
+    const [item] = b.blocked;
     assert.equal(item.toolName, 'Bash');
     assert.equal(item.action, 'ls -la');
     assert.equal(item.description, 'List the directory');
@@ -286,8 +288,8 @@ describe('blocked sessions — intents band 3', () => {
 
   test('permission_request: an absent action is null, not a blank string — the board renders the "not projected" copy for it', () => {
     const b = intentsBand([intentRun({ session_id: 's1', trigger: 'permission_request', tool_name: 'mcp__figma__get_node' }, 5)], NOW);
-    assert.equal(b.items[0].toolName, 'mcp__figma__get_node');
-    assert.equal(b.items[0].action, null);
+    assert.equal(b.blocked[0].toolName, 'mcp__figma__get_node');
+    assert.equal(b.blocked[0].action, null);
   });
 
   test('a withheld action is flagged so the board never styles it as a command; an ordinary action is not flagged (f2d746d)', () => {
@@ -295,24 +297,99 @@ describe('blocked sessions — intents band 3', () => {
       [intentRun({ session_id: 's1', trigger: 'permission_request', tool_name: 'Bash', action: ACTION_WITHHELD }, 5)],
       NOW
     );
-    assert.equal(withheld.items[0].action, ACTION_WITHHELD);
-    assert.equal(withheld.items[0].actionWithheld, true);
+    assert.equal(withheld.blocked[0].action, ACTION_WITHHELD);
+    assert.equal(withheld.blocked[0].actionWithheld, true);
     const ordinary = intentsBand(
       [intentRun({ session_id: 's2', trigger: 'permission_request', tool_name: 'Bash', action: 'ls -la' }, 5)],
       NOW
     );
-    assert.equal(ordinary.items[0].actionWithheld, false);
+    assert.equal(ordinary.blocked[0].actionWithheld, false);
   });
 
   test('an empty 24h window is a measured zero, not an absent signal', () => {
     const b = boardState(base({ intents: [] }), NOW);
-    assert.deepEqual(b.intents, { items: [], moreCount: 0 });
+    assert.deepEqual(b.intents, { blocked: [], idle: [], moreCount: 0 });
   });
 
   test('boardState wires intents through unfiltered by the other bands', () => {
     const runs = [intentRun({ session_id: 'sess-1', trigger: 'notification', question: 'why?' }, 10)];
     const b = boardState(base({ intents: runs }), NOW);
-    assert.equal(b.intents.items.length, 1);
-    assert.equal(b.intents.items[0].question, 'why?');
+    assert.equal(b.intents.blocked.length, 1);
+    assert.equal(b.intents.blocked[0].question, 'why?');
+  });
+});
+
+describe('idle vs blocked — wait_state (contract 2026-09-24 amendment)', () => {
+  test('explicit wait_state on the payload wins outright, no derivation needed', () => {
+    const b = intentsBand(
+      [intentRun({ session_id: 's1', trigger: 'notification', notification_type: 'agent_needs_input', wait_state: 'blocked' }, 5)],
+      NOW
+    );
+    assert.equal(b.blocked.length, 1);
+    assert.equal(b.blocked[0].waitState, 'blocked');
+    const c = intentsBand([intentRun({ session_id: 's2', trigger: 'notification', notification_type: 'idle_prompt', wait_state: 'idle' }, 5)], NOW);
+    assert.equal(c.idle.length, 1);
+    assert.equal(c.idle[0].waitState, 'idle');
+  });
+
+  test('PermissionRequest is always blocked', () => {
+    const b = intentsBand([intentRun({ session_id: 's1', trigger: 'permission_request', tool_name: 'Bash', wait_state: 'blocked' }, 5)], NOW);
+    assert.equal(b.blocked[0].waitState, 'blocked');
+  });
+
+  test('Notification agent_needs_input and elicitation_dialog are blocked; idle_prompt is idle', () => {
+    const needsInput = intentsBand([intentRun({ session_id: 's1', trigger: 'notification', notification_type: 'agent_needs_input', wait_state: 'blocked' }, 5)], NOW);
+    assert.equal(needsInput.blocked.length, 1);
+    const elicitation = intentsBand([intentRun({ session_id: 's2', trigger: 'notification', notification_type: 'elicitation_dialog', wait_state: 'blocked' }, 5)], NOW);
+    assert.equal(elicitation.blocked.length, 1);
+    const idle = intentsBand([intentRun({ session_id: 's3', trigger: 'notification', notification_type: 'idle_prompt', wait_state: 'idle' }, 5)], NOW);
+    assert.equal(idle.idle.length, 1);
+  });
+
+  test('legacy rows (no wait_state) derive from trigger/notification_type: idle_prompt -> idle, anything else -> blocked', () => {
+    assert.equal(deriveWaitState({ trigger: 'notification', notification_type: 'idle_prompt', asked_at: 'x' } as never), 'idle');
+    assert.equal(deriveWaitState({ trigger: 'notification', notification_type: 'agent_needs_input', asked_at: 'x' } as never), 'blocked');
+    assert.equal(deriveWaitState({ trigger: 'notification', asked_at: 'x' } as never), 'blocked');
+    assert.equal(deriveWaitState({ trigger: 'permission_request', asked_at: 'x' } as never), 'blocked');
+  });
+
+  test('a mixed batch: an idle row never appears in the blocked group, and vice versa', () => {
+    const b = intentsBand(
+      [
+        intentRun({ session_id: 'idle-1', trigger: 'notification', notification_type: 'idle_prompt' }, 5),
+        intentRun({ session_id: 'blocked-1', trigger: 'notification', notification_type: 'agent_needs_input' }, 6),
+        intentRun({ session_id: 'blocked-2', trigger: 'permission_request', tool_name: 'Bash' }, 7),
+      ],
+      NOW
+    );
+    assert.deepEqual(b.idle.map((i) => i.sessionId), ['idle-1']);
+    assert.deepEqual(
+      b.blocked.map((i) => i.sessionId).sort(),
+      ['blocked-1', 'blocked-2']
+    );
+    assert.ok(!b.blocked.some((i) => i.sessionId === 'idle-1'));
+    assert.ok(!b.idle.some((i) => i.sessionId.startsWith('blocked')));
+  });
+});
+
+describe('D7 — parked badge (imcoin-d7-affordability-report, 2026-09-24)', () => {
+  test('a parked wave with gate "none" still gets the badge (the D7 shape)', () => {
+    const [d7] = waitingBand(
+      [wave({ slug: 'imcoin-d7-affordability-report', status: 'parked', gate: 'none', waiting_on_scott: 'confirm the report format' })],
+      NOW
+    );
+    assert.equal(d7.status, 'parked');
+    assert.equal(d7.gate, 'none');
+    assert.equal(d7.parkedBadge, true);
+  });
+
+  test('a parked wave with a real gate also gets the badge (unchanged from before)', () => {
+    const [gated] = waitingBand([wave({ slug: 'parked-gated', status: 'parked', gate: 'do-not-run' })], NOW);
+    assert.equal(gated.parkedBadge, true);
+  });
+
+  test('a non-parked wave never gets the badge', () => {
+    const [inFlight] = waitingBand([wave({ slug: 'not-parked', status: 'in-flight', gate: 'do-not-run' })], NOW);
+    assert.equal(inFlight.parkedBadge, false);
   });
 });
