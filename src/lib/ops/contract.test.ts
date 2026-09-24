@@ -1,7 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { validateEnvelope } from './contract.ts';
-import { GITLAB, LIVE_CHECKS, NOW, WAVES, envelopeOf } from './__fixtures__/runs.ts';
+import { GITLAB, LIVE_CHECKS, NOW, WAVES, envelopeOf, wave } from './__fixtures__/runs.ts';
 
 const errorsOf = (x: unknown) => {
   const r = validateEnvelope(x, NOW);
@@ -111,5 +111,110 @@ describe('contract v1 refuses, and lists every problem', () => {
     assert.deepEqual(errorsOf(envelopeOf('waves', { waves: [w] })), []);
     w.branch = '';
     assert.deepEqual(errorsOf(envelopeOf('waves', { waves: [w] })), ['$.payload.waves[0].branch: empty string is not accepted — omit the key']);
+  });
+});
+
+describe('contract v1, 2026-09-24 additions — wave: status parked, scope, claimed, shippable', () => {
+  test('status "parked" is accepted', () => {
+    assert.deepEqual(errorsOf(envelopeOf('waves', { waves: [wave({ slug: 'a', status: 'parked' })] })), []);
+  });
+
+  test('scope ≤ 240 with scope_truncated is accepted; over the cap, or a truncated flag with no scope, is refused', () => {
+    assert.deepEqual(errorsOf(envelopeOf('waves', { waves: [wave({ slug: 'a', scope: 'one-line human title', scope_truncated: true })] })), []);
+    assert.deepEqual(errorsOf(envelopeOf('waves', { waves: [wave({ slug: 'a', scope: 'x'.repeat(241) })] })), [
+      '$.payload.waves[0].scope: longer than 240',
+    ]);
+    const w = wave({ slug: 'a' }) as unknown as Record<string, unknown>;
+    w.scope_truncated = true;
+    assert.deepEqual(errorsOf(envelopeOf('waves', { waves: [w] })), ['$.payload.waves[0].scope_truncated: set without scope']);
+  });
+
+  test('claimed_age_seconds is forbidden unless claimed=true — the endpoint validates only the checkable half', () => {
+    assert.deepEqual(errorsOf(envelopeOf('waves', { waves: [wave({ slug: 'a', claimed: true, claimed_age_seconds: 300 })] })), []);
+    // claimed=true with no age at all: optional, not required.
+    assert.deepEqual(errorsOf(envelopeOf('waves', { waves: [wave({ slug: 'a', claimed: true })] })), []);
+    // claimed=false, or absent, with an age present: refused either way.
+    assert.deepEqual(errorsOf(envelopeOf('waves', { waves: [wave({ slug: 'a', claimed: false, claimed_age_seconds: 300 })] })), [
+      '$.payload.waves[0].claimed_age_seconds: forbidden unless claimed=true',
+    ]);
+    const w = wave({ slug: 'a' }) as unknown as Record<string, unknown>;
+    w.claimed_age_seconds = 300;
+    assert.deepEqual(errorsOf(envelopeOf('waves', { waves: [w] })), ['$.payload.waves[0].claimed_age_seconds: forbidden unless claimed=true']);
+  });
+
+  test('shippable_checked_at is required exactly when shippable is present, whatever its value', () => {
+    assert.deepEqual(
+      errorsOf(envelopeOf('waves', { waves: [wave({ slug: 'a', shippable: true, shippable_checked_at: '2026-09-24T10:00:00Z' })] })),
+      []
+    );
+    assert.deepEqual(
+      errorsOf(envelopeOf('waves', { waves: [wave({ slug: 'a', shippable: false, shippable_checked_at: '2026-09-24T10:00:00Z' })] })),
+      []
+    );
+    assert.deepEqual(errorsOf(envelopeOf('waves', { waves: [wave({ slug: 'a', shippable: true })] })), [
+      '$.payload.waves[0].shippable_checked_at: required when shippable is present',
+    ]);
+    const w = wave({ slug: 'a' }) as unknown as Record<string, unknown>;
+    w.shippable_checked_at = '2026-09-24T10:00:00Z';
+    assert.deepEqual(errorsOf(envelopeOf('waves', { waves: [w] })), [
+      '$.payload.waves[0].shippable_checked_at: forbidden without shippable',
+    ]);
+  });
+});
+
+describe('contract v1, 2026-09-24 additions — kind: intent_request', () => {
+  const valid = () =>
+    envelopeOf('intent_request', {
+      session_id: 'sess-abc123',
+      notification_type: 'agent_needs_input',
+      question: 'merge admin-ui!145 now or after !402 deploys?',
+      asked_at: '2026-09-24T10:00:00Z',
+      repo: 'main-backend',
+    });
+
+  test('a fully-populated intent_request is accepted, and a minimal one (session_id + asked_at only) is too', () => {
+    assert.deepEqual(errorsOf(valid()), []);
+    assert.deepEqual(errorsOf(envelopeOf('intent_request', { session_id: 'sess-1', asked_at: '2026-09-24T10:00:00Z' })), []);
+  });
+
+  test('session_id and asked_at are required', () => {
+    assert.deepEqual(errorsOf(envelopeOf('intent_request', {})), [
+      '$.payload.session_id: required',
+      '$.payload.asked_at: required',
+    ]);
+  });
+
+  test('session_id and notification_type reject characters outside their pattern', () => {
+    const bad1 = valid();
+    (bad1.payload as Record<string, unknown>).session_id = 'has a space';
+    assert.deepEqual(errorsOf(bad1), ['$.payload.session_id: does not match /^[A-Za-z0-9_-]+$/']);
+    const bad2 = valid();
+    (bad2.payload as Record<string, unknown>).notification_type = 'HasCaps';
+    assert.deepEqual(errorsOf(bad2), ['$.payload.notification_type: does not match /^[a-z_]+$/']);
+  });
+
+  test('question over 240 is refused; question_truncated without a question is refused', () => {
+    const long = valid();
+    (long.payload as Record<string, unknown>).question = 'x'.repeat(241);
+    assert.deepEqual(errorsOf(long), ['$.payload.question: longer than 240']);
+    const orphan = envelopeOf('intent_request', { session_id: 'sess-1', asked_at: '2026-09-24T10:00:00Z', question_truncated: true });
+    assert.deepEqual(errorsOf(orphan), ['$.payload.question_truncated: set without question']);
+  });
+
+  test('cwd is forbidden at any depth, alongside the existing list', () => {
+    const e = valid();
+    (e.payload as Record<string, unknown>).cwd = '/home/abdulloh/dev/worktrees/x';
+    assert.deepEqual(errorsOf(e), ['$.payload.cwd: forbidden key']);
+  });
+
+  test('transcript_path is forbidden at any depth', () => {
+    const e = valid();
+    (e.payload as Record<string, unknown>).transcript_path = '/tmp/claude/transcript.jsonl';
+    assert.deepEqual(errorsOf(e), ['$.payload.transcript_path: forbidden key']);
+  });
+
+  test('producer.name "intent-hook" is accepted for this kind', () => {
+    assert.deepEqual(errorsOf(valid()), []);
+    assert.equal((valid().producer as Record<string, unknown>).name, 'intent-hook');
   });
 });

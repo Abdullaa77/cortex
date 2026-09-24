@@ -3,7 +3,7 @@
  * send them. Lines are copied from real session-check output (2026-09-23),
  * SHAs are fake. `NOW` is fixed: the tests never read the wall clock.
  */
-import type { Check, Envelope, GitlabPayload, SessionCheckPayload, Wave, WavesPayload } from '../contract.ts';
+import type { Check, Envelope, GitlabPayload, IntentRequestPayload, SessionCheckPayload, Wave, WavesPayload } from '../contract.ts';
 import type { StoredRun } from '../board.ts';
 
 export const NOW = new Date('2026-09-23T18:00:00Z');
@@ -156,13 +156,30 @@ export const gitlabRun = (finishedMinAgo = 5): StoredRun<GitlabPayload> => ({
   payload: GITLAB,
 });
 
+export function intentRun(over: Partial<IntentRequestPayload> & { session_id: string }, askedMinAgo: number): StoredRun<IntentRequestPayload> {
+  const payload: IntentRequestPayload = {
+    asked_at: minutesAgo(askedMinAgo),
+    ...over,
+  };
+  return {
+    run_id: `run-intent-${over.session_id}-${askedMinAgo}`,
+    finished_at: minutesAgo(askedMinAgo),
+    received_at: minutesAgo(askedMinAgo),
+    payload,
+  };
+}
+
 /** A whole valid envelope of each kind, as a producer would POST it. */
 export function envelopeOf<K extends Envelope['kind']>(kind: K, payload: unknown): Record<string, unknown> {
   return {
     v: 1,
     kind,
     run_id: '3f1c2b7a-0000-4000-8000-000000000001',
-    producer: { name: kind === 'waves' ? 'wave' : kind === 'gitlab' ? 'gitlab-poll' : 'session-check', host: 'hp2-wsl', version: 'c1e4581' },
+    producer: {
+      name: kind === 'waves' ? 'wave' : kind === 'gitlab' ? 'gitlab-poll' : kind === 'intent_request' ? 'intent-hook' : 'session-check',
+      host: 'hp2-wsl',
+      version: 'c1e4581',
+    },
     started_at: minutesAgo(1),
     finished_at: minutesAgo(0),
     payload,
