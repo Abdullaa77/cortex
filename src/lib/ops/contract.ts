@@ -103,6 +103,13 @@ export interface Wave {
    * claim's timestamp is not a schema violation.
    */
   claimed_age_seconds?: number;
+  /**
+   * Same observable-half rule as claimed_age_seconds: FORBIDDEN when claimed
+   * is not true, optional when claimed=true. The claim's own `expiresAt`,
+   * verbatim. THIS is the staleness test — age alone cannot judge it, since a
+   * `--ttl 12` claim is still live at 5h. claimed_age_seconds stays display-only.
+   */
+  lease_expires_at?: string;
   /** Registry rows with ≥1 MR only. Omitted when there are no MRs, or any MR's state is unknown/uncached. */
   shippable?: boolean;
   /** REQUIRED iff `shippable` is present (whatever its value). */
@@ -381,6 +388,7 @@ function wave(c: Collector, p: string, x: unknown) {
       'reviewed_on',
       'claimed',
       'claimed_age_seconds',
+      'lease_expires_at',
       'shippable',
       'shippable_checked_at',
     ]
@@ -412,12 +420,15 @@ function wave(c: Collector, p: string, x: unknown) {
   str(c, `${p}.note_mtime`, o.note_mtime, { re: ISO_Z });
   bool(c, `${p}.in_registry`, o.in_registry);
 
-  // claimed_age_seconds: see the field comment on Wave in contract.ts for why
-  // this checks only the observable half of the prose rule.
+  // claimed_age_seconds / lease_expires_at: see the field comments on Wave in
+  // contract.ts for why this checks only the observable half of the prose rule.
   bool(c, `${p}.claimed`, o.claimed);
   int(c, `${p}.claimed_age_seconds`, o.claimed_age_seconds);
   if (o.claimed !== true && o.claimed_age_seconds !== undefined)
     c.add(`${p}.claimed_age_seconds`, 'forbidden unless claimed=true');
+  str(c, `${p}.lease_expires_at`, o.lease_expires_at, { re: ISO_Z });
+  if (o.claimed !== true && o.lease_expires_at !== undefined)
+    c.add(`${p}.lease_expires_at`, 'forbidden unless claimed=true');
 
   bool(c, `${p}.shippable`, o.shippable);
   str(c, `${p}.shippable_checked_at`, o.shippable_checked_at, { re: ISO_Z });
