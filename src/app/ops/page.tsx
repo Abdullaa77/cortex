@@ -5,9 +5,9 @@ import LoadingState from '@/components/ui/LoadingState';
 import OpsBoard from '@/components/ops/OpsBoard';
 import { useOps } from '@/hooks/useOps';
 
-/** The Command Centre. Scott-only by RLS on ops_runs; read-only by construction. */
+/** The Command Centre. Scott-only by RLS on ops_runs/ops_intents; its one write is an answer (015). */
 export default function OpsPage() {
-  const { board, loading, refetch } = useOps();
+  const { board, loading, refetch, answer } = useOps();
 
   return (
     <AppShell>
@@ -16,7 +16,7 @@ export default function OpsPage() {
           <LoadingState />
         </div>
       ) : (
-        <OpsBoard board={board} onRefresh={refetch} />
+        <OpsBoard board={board} onRefresh={refetch} onAnswer={answer} />
       )}
     </AppShell>
   );

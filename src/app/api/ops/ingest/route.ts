@@ -1,5 +1,5 @@
-import { createClient } from '@supabase/supabase-js';
 import { MAX_BODY_BYTES, validateEnvelope } from '@/lib/ops/contract';
+import { anonClient, isUnreachable, json } from '@/lib/ops/door';
 
 /**
  * The Command Centre's one write door. Contract v1:
@@ -25,18 +25,6 @@ import { MAX_BODY_BYTES, validateEnvelope } from '@/lib/ops/contract';
 
 export const dynamic = 'force-dynamic';
 
-const json = (status: number, body: unknown) => Response.json(body, { status });
-
-/** A failure to reach Supabase at all, as opposed to Supabase answering no. */
-function isUnreachable(err: { message?: string; code?: string; status?: number } | null): boolean {
-  if (!err) return false;
-  const msg = err.message ?? '';
-  return (
-    /fetch failed|ENOTFOUND|ECONNREFUSED|ETIMEDOUT|network|getaddrinfo/i.test(msg) ||
-    (typeof err.status === 'number' && (err.status === 0 || err.status >= 500))
-  );
-}
-
 export async function POST(request: Request) {
   const declared = Number(request.headers.get('content-length') ?? '0');
   if (declared > MAX_BODY_BYTES) return json(413, { ok: false, error: 'too_large' });
@@ -60,9 +48,7 @@ export async function POST(request: Request) {
   const result = validateEnvelope(body, new Date());
   if (!result.ok) return json(422, { ok: false, errors: result.errors });
 
-  const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+  const supabase = anonClient();
 
   let data: unknown;
   let error: { message?: string; code?: string; status?: number } | null;

@@ -217,6 +217,64 @@ export interface IntentRequestPayload {
   untracked?: Record<string, string>;
 }
 
+/**
+ * §5c — the return path (migrations 015 + 016, CORTEX-INTENTS §3).
+ *
+ * The queue carries DECISIONS, never AUTHORIZATIONS (Scott, 2026-09-24). An
+ * answer names which kind of decision it is; the DB refuses anything else.
+ * Authorizations are given up front in the prompt or in person in the
+ * session — a session that needs one it was not given parks. The UI lists
+ * them only to say so ("needs you in the session"); they are never answerable.
+ */
+export type Decision = 'choose' | 'park_or_continue' | 'clarify';
+export const DECISIONS: readonly { value: Decision; words: string }[] = [
+  { value: 'choose', words: 'Choose between the options it gave' },
+  { value: 'park_or_continue', words: 'Park or continue' },
+  { value: 'clarify', words: 'Clarify what was meant' },
+];
+export const AUTHORIZATIONS = [
+  'Merging to main-backend master',
+  'Money',
+  'Writing or bulk-changing production data',
+  'Deleting anything',
+  'Permissions, roles, RBAC',
+  'Anything staff or students will see change',
+  'Creating a production account',
+] as const;
+export const ANSWER_CAP = 1000;
+
+export type IntentStatus = 'pending' | 'applied' | 'parked';
+
+/** An ops_intents row as the board reads it (RLS: owner only). */
+export interface StoredAnswer {
+  id: string;
+  run_id: string;
+  decision: Decision;
+  answer: string;
+  answered_at: string;
+  status: IntentStatus;
+  applied_at: string | null;
+}
+
+/**
+ * One row of `GET /api/ops/intents` — what the dev-box daemon delivers.
+ * session_id is the reply-to; there is no cwd (contract §5b): the daemon
+ * finds the socket from session_id on the box itself.
+ */
+export interface PendingIntent {
+  id: string;
+  run_id: string;
+  session_id: string;
+  wave_slug: string | null;
+  decision: Decision;
+  question: string | null;
+  question_truncated: boolean;
+  options: string[] | null;
+  asked_at: string;
+  answer: string;
+  answered_at: string;
+}
+
 export interface Envelope<K extends Kind = Kind> {
   v: 1;
   kind: K;

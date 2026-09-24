@@ -26,11 +26,15 @@ import type {
   CheckState,
   GitlabPayload,
   IntentRequestPayload,
+  Decision,
+  IntentStatus,
   SessionCheckPayload,
+  StoredAnswer,
   WaitState,
   Wave,
   WavesPayload,
 } from './contract.ts';
+import { DECISIONS } from './contract.ts';
 
 export const BUDGET_MIN = { session_check: 45, gitlab: 30 } as const;
 
@@ -62,6 +66,11 @@ export interface BoardInput {
    * one place that decision is testable without a database).
    */
   intents: StoredRun<IntentRequestPayload>[];
+  /**
+   * ops_intents rows (015) the caller fetched; joined to `intents` by run_id.
+   * A run with no row here is WAITING — the state is derived, not stored.
+   */
+  answers: StoredAnswer[];
 }
 
 export type Tone = 'red' | 'amber' | 'green' | 'grey';
@@ -124,7 +133,23 @@ export interface WaitingItem {
   shippableCheckedAgeMin: number | null;
 }
 
+/** Scott's answer to one band-3 row, as far as Cortex knows it. */
+export interface IntentAnswerView {
+  decision: Decision;
+  decisionWords: string;
+  text: string;
+  answeredAgeMin: number;
+  /**
+   * pending = answered here, not yet delivered; applied = the daemon saw the
+   * session record it (write-witness); parked = §4, the session parked first.
+   */
+  status: IntentStatus;
+  appliedAgeMin: number | null;
+}
+
 export interface IntentItem {
+  /** The intent_request run — what an answer is attached to. */
+  runId: string;
   sessionId: string;
   trigger: 'permission_request' | 'notification';
   /**
@@ -154,6 +179,14 @@ export interface IntentItem {
   repo: string;
   askedAt: string;
   ageMin: number;
+  /**
+   * Whether this row can take an answer here. A permission prompt cannot: the
+   * daemon's only channel is the session's messaging socket, which injects a
+   * user turn and does not click a dialog (ops_intent_answer refuses it too).
+   */
+  answerable: { ok: true } | { ok: false; reason: string };
+  /** null = waiting — nobody has answered it on Cortex. */
+  answer: IntentAnswerView | null;
 }
 
 export interface IntentsBand {
@@ -423,7 +456,21 @@ export function deriveWaitState(p: IntentRequestPayload): WaitState {
   return p.trigger === 'notification' && p.notification_type === 'idle_prompt' ? 'idle' : 'blocked';
 }
 
-export function intentsBand(runs: StoredRun<IntentRequestPayload>[], now: Date): IntentsBand {
+export const NOT_ANSWERABLE_PERMISSION = 'permission prompt — answer it in the terminal; the socket cannot click a dialog';
+
+function viewAnswer(a: StoredAnswer, now: Date): IntentAnswerView {
+  return {
+    decision: a.decision,
+    decisionWords: DECISIONS.find((d) => d.value === a.decision)?.words ?? a.decision,
+    text: a.answer,
+    answeredAgeMin: ageMinutes(a.answered_at, now),
+    status: a.status,
+    appliedAgeMin: a.applied_at ? ageMinutes(a.applied_at, now) : null,
+  };
+}
+
+export function intentsBand(runs: StoredRun<IntentRequestPayload>[], now: Date, answers: StoredAnswer[] = []): IntentsBand {
+  const byRun = new Map(answers.map((a) => [a.run_id, a]));
   const inWindow = runs.filter((r) => now.getTime() - Date.parse(r.payload.asked_at) <= INTENTS_WINDOW_MS);
   inWindow.sort((a, b) => Date.parse(b.payload.asked_at) - Date.parse(a.payload.asked_at));
   const capped = inWindow.slice(0, INTENTS_CAP);
@@ -431,7 +478,9 @@ export function intentsBand(runs: StoredRun<IntentRequestPayload>[], now: Date):
     const p = r.payload;
     const isPermission = p.trigger === 'permission_request';
     const action = isPermission ? (p.action ?? null) : null;
+    const stored = byRun.get(r.run_id);
     return {
+      runId: r.run_id,
       sessionId: p.session_id,
       trigger: p.trigger,
       waitState: deriveWaitState(p),
@@ -444,6 +493,8 @@ export function intentsBand(runs: StoredRun<IntentRequestPayload>[], now: Date):
       repo: p.repo ?? 'repo not tracked',
       askedAt: p.asked_at,
       ageMin: ageMinutes(p.asked_at, now),
+      answerable: isPermission ? { ok: false as const, reason: NOT_ANSWERABLE_PERMISSION } : { ok: true as const },
+      answer: stored ? viewAnswer(stored, now) : null,
     };
   });
   return {
@@ -606,6 +657,6 @@ export function boardState(input: BoardInput, now: Date): Board {
     ready,
     repos,
     controlStrip: ctl ? ctl.payload.checks.map(viewCheck) : null,
-    intents: intentsBand(input.intents, now),
+    intents: intentsBand(input.intents, now, input.answers),
   };
 }
