@@ -33,9 +33,6 @@ import type {
 
 export const BUDGET_MIN = { session_check: 45, gitlab: 30 } as const;
 
-/** `wave claim`'s own default TTL (contract §4) — the age at which a claim reads as stale. */
-export const CLAIMED_STALE_SECONDS = 14400;
-
 /** Intents band 3 shows: newest first, over this window, capped at this many rows. */
 export const INTENTS_WINDOW_MS = 24 * 60 * 60 * 1000;
 export const INTENTS_CAP = 50;
@@ -103,9 +100,15 @@ export interface WaitingItem {
   scopeTruncated: boolean;
   /** null = the claims directory could not be read (absent, not "unclaimed"). */
   claimed: boolean | null;
-  /** null when claimed isn't true, or the age wasn't sent. */
+  /** Display only — NEVER the staleness test (contract 2026-09-24, f2d746d). null when claimed isn't true, or the age wasn't sent. */
   claimedAgeSeconds: number | null;
-  claimedStale: boolean;
+  /**
+   * null exactly when claimed !== true. Judged against render time vs
+   * lease_expires_at, never against age — a `--ttl 12` claim is live at 5h.
+   * 'unknown' (never "stale", never "live") when claimed=true but
+   * lease_expires_at was not sent.
+   */
+  leaseStatus: 'live' | 'stale' | 'unknown' | null;
   /** null = not tracked (no MRs, or an MR's state is unknown/uncached). */
   shippable: boolean | null;
   shippableCheckedAgeMin: number | null;
@@ -122,6 +125,8 @@ export interface IntentItem {
    */
   toolName: string | null;
   action: string | null;
+  /** True when `action` is exactly ACTION_WITHHELD — render as a plain muted notice, never monospace-as-a-command. */
+  actionWithheld: boolean;
   /** permission_request only. The model's own words, shown BESIDE the action, never instead of it. */
   description: string | null;
   /** notification only. The type in words — a known mapping, or the raw value, or "not tracked". */
@@ -320,9 +325,18 @@ export function waitingBand(waves: Wave[], now: Date): WaitingItem[] {
     .filter(isWaiting)
     .map((w) => {
       const claimed = w.claimed ?? null;
-      // claimed_age_seconds is only ever meaningful when claimed=true — the
-      // validator forbids it otherwise, but this stays defensive either way.
+      // claimed_age_seconds / lease_expires_at are only ever meaningful when
+      // claimed=true — the validator forbids them otherwise, but this stays
+      // defensive either way.
       const claimedAgeSeconds = claimed === true ? (w.claimed_age_seconds ?? null) : null;
+      const leaseStatus: WaitingItem['leaseStatus'] =
+        claimed !== true
+          ? null
+          : w.lease_expires_at === undefined
+            ? 'unknown'
+            : now.getTime() >= Date.parse(w.lease_expires_at)
+              ? 'stale'
+              : 'live';
       const shippable = w.shippable ?? null;
       return {
         slug: w.slug,
@@ -340,7 +354,7 @@ export function waitingBand(waves: Wave[], now: Date): WaitingItem[] {
         scopeTruncated: w.scope_truncated === true,
         claimed,
         claimedAgeSeconds,
-        claimedStale: claimedAgeSeconds !== null && claimedAgeSeconds >= CLAIMED_STALE_SECONDS,
+        leaseStatus,
         shippable,
         shippableCheckedAgeMin: shippable === true && w.shippable_checked_at ? ageMinutes(w.shippable_checked_at, now) : null,
       };
@@ -366,17 +380,28 @@ const NOTIFICATION_WORDS: Record<string, string> = {
   elicitation_dialog: 'elicitation',
 };
 
+/**
+ * Contract 2026-09-24 (f2d746d, Scott): credential-shaped Bash commands and
+ * descriptions are withheld WHOLE, never masked — no part of the command is
+ * sent. These are the exact producer-side sentinel strings; the board's only
+ * job is to not style one as a command.
+ */
+export const ACTION_WITHHELD = '<command withheld — may contain a credential>';
+export const DESCRIPTION_WITHHELD = '<description withheld — may contain a credential>';
+
 export function intentsBand(runs: StoredRun<IntentRequestPayload>[], now: Date): IntentsBand {
   const inWindow = runs.filter((r) => now.getTime() - Date.parse(r.payload.asked_at) <= INTENTS_WINDOW_MS);
   inWindow.sort((a, b) => Date.parse(b.payload.asked_at) - Date.parse(a.payload.asked_at));
   const items = inWindow.slice(0, INTENTS_CAP).map((r) => {
     const p = r.payload;
     const isPermission = p.trigger === 'permission_request';
+    const action = isPermission ? (p.action ?? null) : null;
     return {
       sessionId: p.session_id,
       trigger: p.trigger,
       toolName: isPermission ? (p.tool_name ?? null) : null,
-      action: isPermission ? (p.action ?? null) : null,
+      action,
+      actionWithheld: action === ACTION_WITHHELD,
       description: isPermission ? (p.description ?? null) : null,
       notificationWords: isPermission ? null : (p.notification_type && (NOTIFICATION_WORDS[p.notification_type] ?? p.notification_type)) || 'not tracked',
       question: p.question ?? null,

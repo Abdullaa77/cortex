@@ -218,9 +218,15 @@ export default function OpsBoard({ board, onRefresh }: { board: Board; onRefresh
                     </span>
                   )}
                   {w.claimed === true && (
-                    <span className="text-[10px]" style={{ color: w.claimedStale ? TONE_COLOR.amber : undefined }}>
-                      claimed{w.claimedAgeSeconds !== null ? ` · ${formatAge(Math.floor(w.claimedAgeSeconds / 60))} ago` : ''}
-                      {w.claimedStale && <span className="ml-1 font-semibold">lease stale</span>}
+                    <span className="text-[10px]" style={{ color: w.leaseStatus === 'stale' ? TONE_COLOR.amber : undefined }}>
+                      {w.leaseStatus === 'unknown' ? (
+                        'claimed · lease unknown'
+                      ) : (
+                        <>
+                          claimed{w.claimedAgeSeconds !== null ? ` · ${formatAge(Math.floor(w.claimedAgeSeconds / 60))} ago` : ''}
+                          {w.leaseStatus === 'stale' && <span className="ml-1 font-semibold">lease stale</span>}
+                        </>
+                      )}
                     </span>
                   )}
                   {w.shippable === true && (
@@ -270,6 +276,10 @@ export default function OpsBoard({ board, onRefresh }: { board: Board; onRefresh
                     {it.action === null ? (
                       <>
                         {it.toolName} — <span className="italic text-text-muted">action not projected for this tool</span>
+                      </>
+                    ) : it.actionWithheld ? (
+                      <>
+                        {it.toolName}: <span className="italic text-text-muted">{it.action}</span>
                       </>
                     ) : (
                       <>
