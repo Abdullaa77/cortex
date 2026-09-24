@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSupabase } from '@/components/providers/SupabaseProvider';
-import { boardState, type Board, type BoardInput, type Reach, type StoredRun } from '@/lib/ops/board';
-import type { Check, GitlabPayload, SessionCheckPayload, WavesPayload } from '@/lib/ops/contract';
+import { boardState, INTENTS_WINDOW_MS, type Board, type BoardInput, type Reach, type StoredRun } from '@/lib/ops/board';
+import type { Check, GitlabPayload, IntentRequestPayload, SessionCheckPayload, WavesPayload } from '@/lib/ops/contract';
 
 const RUN_SELECT = 'run_id, finished_at, received_at, payload';
 const POLL_MS = 60_000;
@@ -21,7 +21,17 @@ export function classifyFailure(err: { message?: string; code?: string } | null)
 }
 
 /**
- * The board's data, read-only. Five small queries every 60 s while the page
+ * Generous over-fetch for the intents window: board.ts owns the real 24h
+ * filter, ordering and INTENTS_CAP display cap (so that logic is unit
+ * testable without a database) — this just has to bring back at least
+ * everything that could fall inside the window. A flood past this count in
+ * 24h would undercount "N more"; that is a known, documented limit, not a
+ * silent one.
+ */
+const INTENTS_FETCH_LIMIT = 200;
+
+/**
+ * The board's data, read-only. Six small queries every 60 s while the page
  * is open, and a clock tick with them so ages advance and STALE arrives on
  * time even if nothing is re-fetched.
  */
@@ -35,13 +45,14 @@ export function useOps(): { board: Board | null; loading: boolean; refetch: () =
   const fetchAll = useCallback(async () => {
     if (!userId) return;
     const since = new Date(Date.now() - 7 * 86_400_000).toISOString();
+    const sinceIntents = new Date(Date.now() - INTENTS_WINDOW_MS).toISOString();
     const latest = (kind: string, mode?: string) => {
       let q = supabase.from('ops_runs').select(RUN_SELECT).eq('kind', kind);
       if (mode) q = q.eq('mode', mode);
       return q.order('finished_at', { ascending: false }).limit(1).maybeSingle();
     };
     try {
-      const [live, control, waves, gitlab, samples] = await Promise.all([
+      const [live, control, waves, gitlab, samples, intents] = await Promise.all([
         latest('session_check', 'live'),
         latest('session_check', 'control'),
         latest('waves'),
@@ -52,8 +63,15 @@ export function useOps(): { board: Board | null; loading: boolean; refetch: () =
           .eq('kind', 'session_check')
           .eq('mode', 'live')
           .gte('finished_at', since),
+        supabase
+          .from('ops_runs')
+          .select(RUN_SELECT)
+          .eq('kind', 'intent_request')
+          .gte('finished_at', sinceIntents)
+          .order('finished_at', { ascending: false })
+          .limit(INTENTS_FETCH_LIMIT),
       ]);
-      const failed = [live, control, waves, gitlab, samples].find((r) => r.error);
+      const failed = [live, control, waves, gitlab, samples, intents].find((r) => r.error);
       if (failed) throw failed.error;
 
       const apiSamples = ((samples.data ?? []) as { finished_at: string; checks: Check[] | null }[]).flatMap((r) => {
@@ -68,6 +86,7 @@ export function useOps(): { board: Board | null; loading: boolean; refetch: () =
         waves: waves.data as StoredRun<WavesPayload> | null,
         gitlab: gitlab.data as StoredRun<GitlabPayload> | null,
         apiSamples,
+        intents: (intents.data ?? []) as StoredRun<IntentRequestPayload>[],
       });
     } catch (err) {
       const reach: Reach = {
@@ -77,7 +96,7 @@ export function useOps(): { board: Board | null; loading: boolean; refetch: () =
       };
       // Nothing from before the failure is kept: a board that could not ask
       // shows that it could not ask, not the last thing it heard.
-      setInput({ reach, live: null, control: null, waves: null, gitlab: null, apiSamples: [] });
+      setInput({ reach, live: null, control: null, waves: null, gitlab: null, apiSamples: [], intents: [] });
     } finally {
       setLoading(false);
       setNow(new Date());

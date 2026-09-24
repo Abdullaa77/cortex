@@ -209,6 +209,25 @@ export default function OpsBoard({ board, onRefresh }: { board: Board; onRefresh
                   <span className="text-[10px]" style={{ color: TONE_COLOR.amber }}>
                     {w.gate !== 'none' ? w.gate : w.status}
                   </span>
+                  {/* A parked wave stays visible as parked even when a gate string is already
+                      shown above (a shown gate is what kept it in the set; "parked" is separate
+                      information from the gate). */}
+                  {w.status === 'parked' && w.gate !== 'none' && (
+                    <span className="rounded border border-border/60 px-1 text-[10px] uppercase tracking-wide text-text-muted">
+                      parked
+                    </span>
+                  )}
+                  {w.claimed === true && (
+                    <span className="text-[10px]" style={{ color: w.claimedStale ? TONE_COLOR.amber : undefined }}>
+                      claimed{w.claimedAgeSeconds !== null ? ` · ${formatAge(Math.floor(w.claimedAgeSeconds / 60))} ago` : ''}
+                      {w.claimedStale && <span className="ml-1 font-semibold">lease stale</span>}
+                    </span>
+                  )}
+                  {w.shippable === true && (
+                    <span className="text-[10px]" style={{ color: TONE_COLOR.green }}>
+                      shippable{w.shippableCheckedAgeMin !== null ? ` (checked ${formatAge(w.shippableCheckedAgeMin)} ago)` : ''}
+                    </span>
+                  )}
                   <span className="ml-auto text-[10px] text-text-muted/70">
                     {w.ageDays}d old · note {formatAge(w.noteAgeMin)} ago
                   </span>
@@ -217,6 +236,12 @@ export default function OpsBoard({ board, onRefresh }: { board: Board; onRefresh
                   {w.slug} · {w.repos.join(', ')}
                   {!w.inRegistry && ` · ${w.status}, not in the registry`}
                 </p>
+                {w.scope && (
+                  <p className="font-mono text-[10px] text-text-muted/70">
+                    {w.scope}
+                    {w.scopeTruncated && <span className="ml-1 italic text-text-muted/50">… truncated, open the note</span>}
+                  </p>
+                )}
                 {w.waiting && (
                   <p className="mt-0.5 font-mono text-[11px] leading-relaxed text-text-muted">
                     {w.waiting}
@@ -228,6 +253,31 @@ export default function OpsBoard({ board, onRefresh }: { board: Board; onRefresh
           )
         }
       </Band>
+
+      <SectionHeader
+        title="Blocked sessions"
+        note={`(${board.intents.items.length}${board.intents.moreCount > 0 ? ` +${board.intents.moreCount} more` : ''})`}
+      />
+      <Panel>
+        {board.intents.items.length === 0 ? (
+          <p className="px-3 py-2 font-mono text-[11px] text-text-muted">no session blocked on you in the last 24h</p>
+        ) : (
+          board.intents.items.map((it) => (
+            <div key={it.sessionId + it.askedAt} className="px-3 py-2">
+              <p className="font-mono text-xs text-text-primary">{it.question}</p>
+              <p className="font-mono text-[10px] text-text-muted/60">
+                {it.notificationType} · {it.repo} · {formatAge(it.ageMin)} ago
+              </p>
+            </div>
+          ))
+        )}
+        {board.intents.moreCount > 0 && (
+          <p className="px-3 py-1.5 font-mono text-[10px] text-text-muted/60">{board.intents.moreCount} more</p>
+        )}
+        <p className="px-3 py-1.5 font-mono text-[10px] italic text-text-muted/50">
+          answer tracking arrives in step 3 — a row may already have been answered at the terminal
+        </p>
+      </Panel>
 
       <SectionHeader title="Ready to merge" />
       <Band data={board.ready}>
