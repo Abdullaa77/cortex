@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { ACTION_WITHHELD, boardState, deriveWaitState, freshness, intentsBand, readyBand, rollup, waitingBand, type BoardInput } from './board.ts';
+import { ACTION_WITHHELD, NOT_ANSWERABLE_PERMISSION, boardState, deriveWaitState, freshness, intentsBand, readyBand, rollup, waitingBand, type BoardInput } from './board.ts';
 import { CONTROL_CHECKS, LIVE_CHECKS, NOW, GITLAB, WAVES, gitlabRun, intentRun, minutesAgo, sessionRun, wave, wavesRun } from './__fixtures__/runs.ts';
 
 const base = (over: Partial<BoardInput> = {}): BoardInput => ({
@@ -11,6 +11,7 @@ const base = (over: Partial<BoardInput> = {}): BoardInput => ({
   gitlab: gitlabRun(),
   apiSamples: [],
   intents: [],
+  answers: [],
   ...over,
 });
 
@@ -391,5 +392,66 @@ describe('D7 — parked badge (imcoin-d7-affordability-report, 2026-09-24)', () 
   test('a non-parked wave never gets the badge', () => {
     const [inFlight] = waitingBand([wave({ slug: 'not-parked', status: 'in-flight', gate: 'do-not-run' })], NOW);
     assert.equal(inFlight.parkedBadge, false);
+  });
+});
+
+describe('answers — the return path (015, §5c)', () => {
+  const answer = (runId: string, over: Record<string, unknown> = {}) => ({
+    id: `ans-${runId}`,
+    run_id: runId,
+    stop_item: 1,
+    answer: 'Yes — merge it.',
+    answered_at: minutesAgo(4),
+    status: 'pending' as const,
+    applied_at: null,
+    ...over,
+  });
+
+  test('a run with no ops_intents row is waiting: answer null, answerable', () => {
+    const b = intentsBand([intentRun({ session_id: 's1', trigger: 'notification', notification_type: 'agent_needs_input' }, 5)], NOW, []);
+    assert.equal(b.blocked[0].answer, null);
+    assert.deepEqual(b.blocked[0].answerable, { ok: true });
+  });
+
+  test('joined by run_id — never by session_id (one session can ask twice)', () => {
+    const first = intentRun({ session_id: 'same', trigger: 'notification', notification_type: 'agent_needs_input' }, 30);
+    const second = intentRun({ session_id: 'same', trigger: 'notification', notification_type: 'agent_needs_input' }, 5);
+    const b = intentsBand([first, second], NOW, [answer(first.run_id)]);
+    const byRun = new Map(b.blocked.map((i) => [i.runId, i]));
+    assert.equal(byRun.get(first.run_id)!.answer!.text, 'Yes — merge it.');
+    assert.equal(byRun.get(second.run_id)!.answer, null);
+  });
+
+  test('pending vs applied carry their own ages; the stop-list item is in words', () => {
+    const r1 = intentRun({ session_id: 'p', trigger: 'notification' }, 20);
+    const r2 = intentRun({ session_id: 'a', trigger: 'notification' }, 20);
+    const b = intentsBand([r1, r2], NOW, [
+      answer(r1.run_id),
+      answer(r2.run_id, { status: 'applied', applied_at: minutesAgo(2), stop_item: 4 }),
+    ]);
+    const byRun = new Map(b.blocked.map((i) => [i.runId, i]));
+    const p = byRun.get(r1.run_id)!.answer!;
+    assert.equal(p.status, 'pending');
+    assert.equal(p.answeredAgeMin, 4);
+    assert.equal(p.appliedAgeMin, null);
+    assert.match(p.stopWords, /master/);
+    const a = byRun.get(r2.run_id)!.answer!;
+    assert.equal(a.status, 'applied');
+    assert.equal(a.appliedAgeMin, 2);
+    assert.equal(a.stopWords, 'Permissions, roles, RBAC');
+  });
+
+  test('an idle row takes an answer too (feeding it is the point); a permission prompt does not', () => {
+    const idle = intentRun({ session_id: 'i', trigger: 'notification', notification_type: 'idle_prompt', wait_state: 'idle' }, 5);
+    const perm = intentRun({ session_id: 'q', trigger: 'permission_request', tool_name: 'Bash', action: 'git push' }, 5);
+    const b = intentsBand([idle, perm], NOW, []);
+    assert.deepEqual(b.idle[0].answerable, { ok: true });
+    assert.deepEqual(b.blocked[0].answerable, { ok: false, reason: NOT_ANSWERABLE_PERMISSION });
+  });
+
+  test('boardState passes input.answers through', () => {
+    const run = intentRun({ session_id: 's', trigger: 'notification' }, 5);
+    const b = boardState(base({ intents: [run], answers: [answer(run.run_id)] }), NOW);
+    assert.equal(b.intents.blocked[0].answer!.status, 'pending');
   });
 });

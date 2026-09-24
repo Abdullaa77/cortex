@@ -1,12 +1,16 @@
 'use client';
 
+import { useState } from 'react';
 import { AlertCircle, Lock, RefreshCw } from 'lucide-react';
-import type { Board, CheckView, Freshness, IntentItem, Tone, Tracked } from '@/lib/ops/board';
+import type { Board, CheckView, Freshness, IntentAnswerView, IntentItem, Tone, Tracked } from '@/lib/ops/board';
 import { formatAge } from '@/lib/ops/board';
+import { ANSWER_CAP, STOP_LIST } from '@/lib/ops/contract';
+import type { AnswerResult } from '@/hooks/useOps';
 
 /**
- * The Command Centre. Read-only: no buttons that write, no approvals, no
- * retries of anything but this page's own read.
+ * The Command Centre. One write, and only one: Scott's answer to a session
+ * that is waiting on him (band 3, CORTEX-INTENTS §5c). No approve-anything,
+ * no retries of anything but this page's own read, no gate toggles (§8).
  *
  * Everything shown is a value + when it was measured + how. Three states,
  * visibly different: a value · "—" with the reason it is not tracked · "—"
@@ -124,8 +128,124 @@ function Band<T>({ data, children }: { data: Tracked<T>; children: (v: T) => Rea
   return <Panel>{data.tracked ? children(data.value) : <NotTracked reason={data.reason} />}</Panel>;
 }
 
+export type OnAnswer = (runId: string, stopItem: number, text: string) => Promise<AnswerResult>;
+
+/**
+ * Where an answer stands, from the database's own record. "pending" means
+ * Cortex holds it and the dev-box daemon has not yet seen the session record
+ * it — the board never claims delivery the writer did not confirm (§6.5).
+ */
+function AnswerLine({ a }: { a: IntentAnswerView }) {
+  const where =
+    a.status === 'applied'
+      ? `delivered — session recorded it ${formatAge(a.appliedAgeMin ?? 0)} ago`
+      : a.status === 'parked'
+        ? 'session parked before delivery — the answer goes to the wave note'
+        : 'answered — waiting for delivery';
+  const tone: Tone = a.status === 'applied' ? 'green' : 'amber';
+  return (
+    <div className="mt-1 border-l-2 pl-2" style={{ borderColor: TONE_COLOR[tone] }}>
+      <p className="font-mono text-[11px] text-text-primary whitespace-pre-wrap">{a.text}</p>
+      <p className="font-mono text-[10px] text-text-muted">
+        <span style={{ color: TONE_COLOR[tone] }}>{where}</span> · answered {formatAge(a.answeredAgeMin)} ago · stop-list{' '}
+        {a.stopItem}: {a.stopWords}
+      </p>
+    </div>
+  );
+}
+
+/**
+ * The answer box. The stop-list item comes first and is required: §3 lets
+ * only those seven kinds of decision into the queue, and the database refuses
+ * an answer without one. "None of these" is not an option on purpose — the
+ * copy says where such a decision belongs instead.
+ */
+function AnswerForm({ runId, onAnswer }: { runId: string; onAnswer: OnAnswer }) {
+  const [open, setOpen] = useState(false);
+  const [item, setItem] = useState('');
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (!open)
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="mt-1 rounded border border-accent/40 bg-accent/10 px-2 py-0.5 font-mono text-[11px] text-accent transition-colors hover:bg-accent/20"
+      >
+        answer
+      </button>
+    );
+
+  const submit = async () => {
+    setBusy(true);
+    setError(null);
+    const r = await onAnswer(runId, Number(item), text);
+    setBusy(false);
+    if (!r.ok) setError(r.reason);
+  };
+
+  return (
+    <div className="mt-1.5 space-y-1.5">
+      <select
+        value={item}
+        onChange={(e) => {
+          setItem(e.target.value);
+          setError(null);
+        }}
+        aria-label="Stop-list item"
+        className="w-full rounded border border-border bg-surface2 px-2 py-1 font-mono text-xs text-text-primary focus:border-accent/40 focus:outline-none"
+      >
+        <option value="">which stop-list item is this?</option>
+        {STOP_LIST.map((w, i) => (
+          <option key={w} value={i + 1}>
+            {i + 1}. {w}
+          </option>
+        ))}
+      </select>
+      <textarea
+        value={text}
+        onChange={(e) => {
+          setText(e.target.value);
+          setError(null);
+        }}
+        rows={3}
+        maxLength={ANSWER_CAP}
+        aria-label="Your answer"
+        placeholder="your answer — delivered to the session verbatim"
+        className="w-full resize-none rounded border border-border bg-surface2 px-2 py-1 font-mono text-xs text-text-primary placeholder:text-text-muted/50 focus:border-accent/40 focus:outline-none"
+      />
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={submit}
+          disabled={busy || item === '' || !text.trim()}
+          className="rounded border border-accent/40 bg-accent/10 px-2.5 py-1 font-mono text-xs text-accent transition-colors hover:bg-accent/20 disabled:opacity-40"
+        >
+          {busy ? 'sending…' : 'send answer'}
+        </button>
+        <button
+          type="button"
+          onClick={() => setOpen(false)}
+          className="font-mono text-[11px] text-text-muted hover:text-text-primary"
+        >
+          cancel
+        </button>
+        <span className="font-mono text-[10px] text-text-muted/60">
+          {text.length}/{ANSWER_CAP} · one answer per question, final
+        </span>
+      </div>
+      <p className="font-mono text-[10px] italic text-text-muted/60">
+        None of the seven? Then it does not belong here — a sandbox rule, a hook or the brief&apos;s else-branch bounds it.
+      </p>
+      {error && <p className="font-mono text-[10px] text-[#F59E0B]">{error}</p>}
+    </div>
+  );
+}
+
 /** One blocked-sessions row — same shape for both the Blocked and Idle groups. */
-function IntentRow({ it }: { it: IntentItem }) {
+function IntentRow({ it, onAnswer }: { it: IntentItem; onAnswer: OnAnswer }) {
   return (
     <div className="px-3 py-2">
       {it.trigger === 'permission_request' ? (
@@ -158,6 +278,13 @@ function IntentRow({ it }: { it: IntentItem }) {
       <p className="font-mono text-[10px] text-text-muted/60">
         {it.repo} · {formatAge(it.ageMin)} ago
       </p>
+      {it.answer ? (
+        <AnswerLine a={it.answer} />
+      ) : it.answerable.ok ? (
+        <AnswerForm runId={it.runId} onAnswer={onAnswer} />
+      ) : (
+        <p className="font-mono text-[10px] italic text-text-muted/60">{it.answerable.reason}</p>
+      )}
     </div>
   );
 }
@@ -169,7 +296,17 @@ function IntentRow({ it }: { it: IntentItem }) {
  * Blocked heading — board.ts's intentsBand() already partitions items by
  * waitState, so this component only ever sees the group it was given.
  */
-function IntentGroup({ title, items, emptyCopy }: { title: string; items: IntentItem[]; emptyCopy: string }) {
+function IntentGroup({
+  title,
+  items,
+  emptyCopy,
+  onAnswer,
+}: {
+  title: string;
+  items: IntentItem[];
+  emptyCopy: string;
+  onAnswer: OnAnswer;
+}) {
   return (
     <div>
       <p className="px-3 pt-2 font-mono text-[10px] font-semibold uppercase tracking-[2px] text-text-muted/70">
@@ -178,13 +315,21 @@ function IntentGroup({ title, items, emptyCopy }: { title: string; items: Intent
       {items.length === 0 ? (
         <p className="px-3 py-1.5 font-mono text-[11px] italic text-text-muted/50">{emptyCopy}</p>
       ) : (
-        items.map((it) => <IntentRow key={it.sessionId + it.askedAt} it={it} />)
+        items.map((it) => <IntentRow key={it.runId} it={it} onAnswer={onAnswer} />)
       )}
     </div>
   );
 }
 
-export default function OpsBoard({ board, onRefresh }: { board: Board; onRefresh: () => void }) {
+export default function OpsBoard({
+  board,
+  onRefresh,
+  onAnswer,
+}: {
+  board: Board;
+  onRefresh: () => void;
+  onAnswer: OnAnswer;
+}) {
   const hb = board.heartbeat;
   return (
     <div className="mx-auto max-w-3xl p-4 pb-10 lg:px-10 lg:py-6 page-enter" data-board-tone={board.tone}>
@@ -336,13 +481,13 @@ export default function OpsBoard({ board, onRefresh }: { board: Board; onRefresh
                 <p className="px-3 py-2 font-mono text-[11px] text-text-muted">no session blocked on you in the last 24h</p>
               ) : (
                 <>
-                  <IntentGroup title="Blocked — needs your answer" items={blocked} emptyCopy="none blocked" />
-                  <IntentGroup title="Idle — close or feed" items={idle} emptyCopy="none idle" />
+                  <IntentGroup title="Blocked — needs your answer" items={blocked} emptyCopy="none blocked" onAnswer={onAnswer} />
+                  <IntentGroup title="Idle — close or feed" items={idle} emptyCopy="none idle" onAnswer={onAnswer} />
                 </>
               )}
               {moreCount > 0 && <p className="px-3 py-1.5 font-mono text-[10px] text-text-muted/60">{moreCount} more</p>}
               <p className="px-3 py-1.5 font-mono text-[10px] italic text-text-muted/50">
-                answer tracking arrives in step 3 — a row may already have been answered at the terminal
+                Cortex knows only answers given here — an unanswered row may already have been answered at the terminal
               </p>
             </Panel>
           </>

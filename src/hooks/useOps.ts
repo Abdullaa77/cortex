@@ -3,7 +3,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSupabase } from '@/components/providers/SupabaseProvider';
 import { boardState, INTENTS_WINDOW_MS, type Board, type BoardInput, type Reach, type StoredRun } from '@/lib/ops/board';
-import type { Check, GitlabPayload, IntentRequestPayload, SessionCheckPayload, WavesPayload } from '@/lib/ops/contract';
+import {
+  ANSWER_CAP,
+  type Check,
+  type GitlabPayload,
+  type IntentRequestPayload,
+  type SessionCheckPayload,
+  type StoredAnswer,
+  type WavesPayload,
+} from '@/lib/ops/contract';
 
 const RUN_SELECT = 'run_id, finished_at, received_at, payload';
 const POLL_MS = 60_000;
@@ -14,6 +22,8 @@ const POLL_MS = 60_000;
  */
 export function classifyFailure(err: { message?: string; code?: string } | null): string {
   const msg = err?.message ?? 'unknown error';
+  if ((err?.code === 'PGRST205' || err?.code === '42P01') && /ops_intents/.test(msg))
+    return 'ops_intents missing — migration 015 not applied';
   if (err?.code === 'PGRST205' || err?.code === '42P01') return 'ops_runs missing — migration 013 not applied';
   if (/fetch|network|ENOTFOUND|Failed to fetch|Load failed/i.test(msg))
     return 'database unreachable — is the Supabase project paused?';
@@ -35,7 +45,23 @@ const INTENTS_FETCH_LIMIT = 200;
  * is open, and a clock tick with them so ages advance and STALE arrives on
  * time even if nothing is re-fetched.
  */
-export function useOps(): { board: Board | null; loading: boolean; refetch: () => void } {
+/** What ops_intent_answer (015) said, in words the answer form can show. */
+export type AnswerResult = { ok: true } | { ok: false; reason: string };
+
+const ANSWER_REFUSALS: Record<string, string> = {
+  unauthorized: 'not signed in',
+  not_stop_list: 'pick the stop-list item this falls under — anything else does not belong in the queue',
+  not_found: 'that question is not in the database (or not yours)',
+  not_answerable: 'a permission prompt is answered in the terminal',
+  already_answered: 'already answered — one answer per question',
+};
+
+export function useOps(): {
+  board: Board | null;
+  loading: boolean;
+  refetch: () => void;
+  answer: (runId: string, stopItem: number, text: string) => Promise<AnswerResult>;
+} {
   const { supabase, session } = useSupabase();
   const userId = session?.user?.id ?? null;
   const [input, setInput] = useState<BoardInput | null>(null);
@@ -52,7 +78,7 @@ export function useOps(): { board: Board | null; loading: boolean; refetch: () =
       return q.order('finished_at', { ascending: false }).limit(1).maybeSingle();
     };
     try {
-      const [live, control, waves, gitlab, samples, intents] = await Promise.all([
+      const [live, control, waves, gitlab, samples, intents, answers] = await Promise.all([
         latest('session_check', 'live'),
         latest('session_check', 'control'),
         latest('waves'),
@@ -70,8 +96,15 @@ export function useOps(): { board: Board | null; loading: boolean; refetch: () =
           .gte('finished_at', sinceIntents)
           .order('finished_at', { ascending: false })
           .limit(INTENTS_FETCH_LIMIT),
+        // Answers to anything that can still be in the window. Keyed on
+        // asked_at (the run's domain time), matching the band's own filter.
+        supabase
+          .from('ops_intents')
+          .select('id, run_id, stop_item, answer, answered_at, status, applied_at')
+          .gte('asked_at', sinceIntents)
+          .limit(INTENTS_FETCH_LIMIT),
       ]);
-      const failed = [live, control, waves, gitlab, samples, intents].find((r) => r.error);
+      const failed = [live, control, waves, gitlab, samples, intents, answers].find((r) => r.error);
       if (failed) throw failed.error;
 
       const apiSamples = ((samples.data ?? []) as { finished_at: string; checks: Check[] | null }[]).flatMap((r) => {
@@ -87,6 +120,7 @@ export function useOps(): { board: Board | null; loading: boolean; refetch: () =
         gitlab: gitlab.data as StoredRun<GitlabPayload> | null,
         apiSamples,
         intents: (intents.data ?? []) as StoredRun<IntentRequestPayload>[],
+        answers: (answers.data ?? []) as StoredAnswer[],
       });
     } catch (err) {
       const reach: Reach = {
@@ -96,7 +130,7 @@ export function useOps(): { board: Board | null; loading: boolean; refetch: () =
       };
       // Nothing from before the failure is kept: a board that could not ask
       // shows that it could not ask, not the last thing it heard.
-      setInput({ reach, live: null, control: null, waves: null, gitlab: null, apiSamples: [], intents: [] });
+      setInput({ reach, live: null, control: null, waves: null, gitlab: null, apiSamples: [], intents: [], answers: [] });
     } finally {
       setLoading(false);
       setNow(new Date());
@@ -114,6 +148,30 @@ export function useOps(): { board: Board | null; loading: boolean; refetch: () =
     };
   }, [fetchAll]);
 
+  /**
+   * Scott's answer → ops_intent_answer (015). The database decides — stop-list
+   * item, length, ownership, one answer per question, no permission prompts —
+   * and this only turns its refusal into words. Refetches on success so the
+   * row flips to "answered — waiting for delivery" from the database's own
+   * record, not from local state.
+   */
+  const answer = useCallback(
+    async (runId: string, stopItem: number, text: string): Promise<AnswerResult> => {
+      if (!text.trim() || text.length > ANSWER_CAP) return { ok: false, reason: `answer: 1–${ANSWER_CAP} characters` };
+      const { data, error } = await supabase.rpc('ops_intent_answer', {
+        p_run_id: runId,
+        p_stop_item: stopItem,
+        p_answer: text,
+      });
+      if (error) return { ok: false, reason: classifyFailure(error) };
+      const r = data as { ok: boolean; error?: string; detail?: string };
+      if (!r.ok) return { ok: false, reason: ANSWER_REFUSALS[r.error ?? ''] ?? `${r.error}${r.detail ? `: ${r.detail}` : ''}` };
+      await fetchAll();
+      return { ok: true };
+    },
+    [supabase, fetchAll]
+  );
+
   const board = useMemo(() => (input ? boardState(input, now) : null), [input, now]);
-  return { board, loading, refetch: fetchAll };
+  return { board, loading, refetch: fetchAll, answer };
 }

@@ -217,6 +217,55 @@ export interface IntentRequestPayload {
   untracked?: Record<string, string>;
 }
 
+/**
+ * §5c — the return path (migration 015, CORTEX-INTENTS §3/§5). The seven
+ * stop-list items (PROTOCOL.md §5) are the only things that may enter the
+ * queue; an answer must name one (`stop_item`, 1-based index here). The DB
+ * enforces 1–7; these words are the UI's.
+ */
+export const STOP_LIST = [
+  'Merging to main-backend master (the production deploy)',
+  'Money',
+  'Writing, deleting or bulk-changing production data',
+  'Permissions, roles, RBAC',
+  'Anything staff or students will see change',
+  'Creating any production account',
+  'Two sessions contradicting each other',
+] as const;
+export const ANSWER_CAP = 1000;
+
+export type IntentStatus = 'pending' | 'applied' | 'parked';
+
+/** An ops_intents row as the board reads it (RLS: owner only). */
+export interface StoredAnswer {
+  id: string;
+  run_id: string;
+  stop_item: number;
+  answer: string;
+  answered_at: string;
+  status: IntentStatus;
+  applied_at: string | null;
+}
+
+/**
+ * One row of `GET /api/ops/intents` — what the dev-box daemon delivers.
+ * session_id is the reply-to; there is no cwd (contract §5b): the daemon
+ * finds the socket from session_id on the box itself.
+ */
+export interface PendingIntent {
+  id: string;
+  run_id: string;
+  session_id: string;
+  wave_slug: string | null;
+  stop_item: number;
+  question: string | null;
+  question_truncated: boolean;
+  options: string[] | null;
+  asked_at: string;
+  answer: string;
+  answered_at: string;
+}
+
 export interface Envelope<K extends Kind = Kind> {
   v: 1;
   kind: K;
