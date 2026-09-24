@@ -151,12 +151,33 @@ export interface GitlabPayload {
   repos: GitlabRepo[];
 }
 
-/** §5b. One per Claude Code Notification hook firing. Producer: intent-hook. */
+/**
+ * §5b. One per blocked session, from two hooks: `PermissionRequest` (the
+ * permission-prompt source — carries tool_name/tool_input) and `Notification`
+ * (every other way a session waits — matcher excludes `permission_prompt`,
+ * which PermissionRequest already covers). Producer: intent-hook.
+ */
 export interface IntentRequestPayload {
   /** Hook payload session_id, verbatim; [A-Za-z0-9_-], ≤ 128. The reply-to address for the daemon. */
   session_id: string;
-  /** Hook payload notification_type, verbatim; [a-z_], ≤ 40. Free string on purpose — a new
-   *  Claude Code type must not 422. Omit + `untracked` when the hook payload has none. */
+  /** Which hook fired. REQUIRED. Gates which of the fields below are valid. */
+  trigger: 'permission_request' | 'notification';
+  /** permission_request only. Hook tool_name verbatim; [A-Za-z0-9_.:-], ≤ 80 (e.g. "Bash"). */
+  tool_name?: string;
+  /**
+   * permission_request only. WHAT the tool wants to do, projected from
+   * tool_input field by field — NEVER tool_input itself (that key is
+   * forbidden, see FORBIDDEN_KEYS). Cut at 240, NO content filter. Omitted
+   * with a reason in `untracked` when nothing could be projected for the tool.
+   */
+  action?: string;
+  action_truncated?: true;
+  /** permission_request only. tool_input.description when present — the model's own
+   *  one-line summary, shown BESIDE the action, never instead of it. ≤ 240. */
+  description?: string;
+  description_truncated?: true;
+  /** notification only. Hook payload notification_type, verbatim; [a-z_], ≤ 40. Free string
+   *  on purpose — a new Claude Code type must not 422. Omit + `untracked` when absent. */
   notification_type?: string;
   /** Hook payload `message`, VERBATIM, cut at 240 chars. NO content filter. Omit + `untracked`
    *  when the payload carries no message. */
@@ -194,8 +215,10 @@ export type Validation = { ok: true; envelope: Envelope } | { ok: false; errors:
  * (013, widened by 014). `cwd` and `transcript_path` are local-machine detail —
  * CORTEX-INTENTS.md §5 lists `cwd` on the intent shape, but the contract keeps
  * local paths off this box; the hook writes it to a local sidecar instead.
+ * `tool_input` carries file contents for Write/Edit and anything at all for
+ * MCP tools — only the `action` projection (contract §5b) ever leaves the box.
  */
-export const FORBIDDEN_KEYS = ['body', 'note', 'content', 'markdown', 'worktree', 'chat', 'source_line', 'cwd', 'transcript_path'];
+export const FORBIDDEN_KEYS = ['body', 'note', 'content', 'markdown', 'worktree', 'chat', 'source_line', 'cwd', 'transcript_path', 'tool_input'];
 
 // ---------------------------------------------------------------- primitives
 
@@ -409,12 +432,50 @@ function intentRequest(c: Collector, p: string, x: unknown) {
     c,
     p,
     x,
-    ['session_id', 'asked_at'],
-    ['notification_type', 'question', 'question_truncated', 'repo', 'wave_slug', 'untracked']
+    ['session_id', 'trigger', 'asked_at'],
+    [
+      'tool_name',
+      'action',
+      'action_truncated',
+      'description',
+      'description_truncated',
+      'notification_type',
+      'question',
+      'question_truncated',
+      'repo',
+      'wave_slug',
+      'untracked',
+    ]
   );
   if (!o) return;
   str(c, `${p}.session_id`, o.session_id, { re: /^[A-Za-z0-9_-]+$/, max: 128 });
+  oneOf(c, `${p}.trigger`, o.trigger, ['permission_request', 'notification']);
+
+  str(c, `${p}.tool_name`, o.tool_name, { re: /^[A-Za-z0-9_.:-]+$/, max: 80 });
+  str(c, `${p}.action`, o.action, { max: WAITING_CAP });
+  if (o.action_truncated !== undefined && o.action_truncated !== true)
+    c.add(`${p}.action_truncated`, 'must be true, or omitted');
+  if (o.action_truncated === true && o.action === undefined) c.add(`${p}.action_truncated`, 'set without action');
+  str(c, `${p}.description`, o.description, { max: WAITING_CAP });
+  if (o.description_truncated !== undefined && o.description_truncated !== true)
+    c.add(`${p}.description_truncated`, 'must be true, or omitted');
+  if (o.description_truncated === true && o.description === undefined)
+    c.add(`${p}.description_truncated`, 'set without description');
   str(c, `${p}.notification_type`, o.notification_type, { re: /^[a-z_]+$/, max: 40 });
+
+  // Cross-combination, contract 2026-09-24 (aeb9adf): permission_request-only
+  // fields are forbidden when trigger=notification and vice versa. Checked
+  // against `=== true`/`=== false` rather than truthiness so an invalid
+  // trigger value (already reported by oneOf above) forbids BOTH sides —
+  // there is no trigger under which these fields would be valid.
+  const isPermission = o.trigger === 'permission_request';
+  const isNotification = o.trigger === 'notification';
+  if (!isPermission)
+    for (const k of ['tool_name', 'action', 'action_truncated', 'description', 'description_truncated'] as const)
+      if (o[k] !== undefined) c.add(`${p}.${k}`, 'forbidden unless trigger=permission_request');
+  if (!isNotification && o.notification_type !== undefined)
+    c.add(`${p}.notification_type`, 'forbidden unless trigger=notification');
+
   str(c, `${p}.question`, o.question, { max: WAITING_CAP });
   if (o.question_truncated !== undefined && o.question_truncated !== true)
     c.add(`${p}.question_truncated`, 'must be true, or omitted');
