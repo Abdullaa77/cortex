@@ -113,9 +113,21 @@ export interface WaitingItem {
 
 export interface IntentItem {
   sessionId: string;
-  /** The hook's message, or the fixed fallback copy when the payload carried none. */
-  question: string;
-  notificationType: string;
+  trigger: 'permission_request' | 'notification';
+  /**
+   * permission_request only. The tool name is always present when trigger is
+   * permission_request (contract requires it); `action` is null exactly when
+   * the hook could not project one for that tool — render the "not
+   * projected" copy then, never a blank line.
+   */
+  toolName: string | null;
+  action: string | null;
+  /** permission_request only. The model's own words, shown BESIDE the action, never instead of it. */
+  description: string | null;
+  /** notification only. The type in words — a known mapping, or the raw value, or "not tracked". */
+  notificationWords: string | null;
+  /** Shown when present, on either trigger. */
+  question: string | null;
   repo: string;
   askedAt: string;
   ageMin: number;
@@ -342,17 +354,37 @@ export function waitingBand(waves: Wave[], now: Date): WaitingItem[] {
  * rolling 24h window, capped at INTENTS_CAP with the overflow counted, not
  * dropped silently.
  */
+/**
+ * Known Notification matcher values (CORTEX-INTENTS §9.1 delta, aeb9adf) in
+ * words. An unknown type must not 422 (contract: "a new Claude Code type
+ * must not 422"), so one outside this map renders as its raw value rather
+ * than disappearing.
+ */
+const NOTIFICATION_WORDS: Record<string, string> = {
+  idle_prompt: 'idle — waiting for input',
+  agent_needs_input: 'needs input',
+  elicitation_dialog: 'elicitation',
+};
+
 export function intentsBand(runs: StoredRun<IntentRequestPayload>[], now: Date): IntentsBand {
   const inWindow = runs.filter((r) => now.getTime() - Date.parse(r.payload.asked_at) <= INTENTS_WINDOW_MS);
   inWindow.sort((a, b) => Date.parse(b.payload.asked_at) - Date.parse(a.payload.asked_at));
-  const items = inWindow.slice(0, INTENTS_CAP).map((r) => ({
-    sessionId: r.payload.session_id,
-    question: r.payload.question ?? 'no message in hook payload',
-    notificationType: r.payload.notification_type ?? 'not tracked',
-    repo: r.payload.repo ?? 'repo not tracked',
-    askedAt: r.payload.asked_at,
-    ageMin: ageMinutes(r.payload.asked_at, now),
-  }));
+  const items = inWindow.slice(0, INTENTS_CAP).map((r) => {
+    const p = r.payload;
+    const isPermission = p.trigger === 'permission_request';
+    return {
+      sessionId: p.session_id,
+      trigger: p.trigger,
+      toolName: isPermission ? (p.tool_name ?? null) : null,
+      action: isPermission ? (p.action ?? null) : null,
+      description: isPermission ? (p.description ?? null) : null,
+      notificationWords: isPermission ? null : (p.notification_type && (NOTIFICATION_WORDS[p.notification_type] ?? p.notification_type)) || 'not tracked',
+      question: p.question ?? null,
+      repo: p.repo ?? 'repo not tracked',
+      askedAt: p.asked_at,
+      ageMin: ageMinutes(p.asked_at, now),
+    };
+  });
   return { items, moreCount: Math.max(0, inWindow.length - items.length) };
 }
 

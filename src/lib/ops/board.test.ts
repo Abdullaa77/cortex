@@ -229,11 +229,41 @@ describe('blocked sessions — intents band 3', () => {
     assert.equal(b.moreCount, 0);
   });
 
-  test('an omitted question, notification_type or repo renders the fixed fallback copy', () => {
-    const b = intentsBand([intentRun({ session_id: 'sess-1' }, 5)], NOW);
-    assert.equal(b.items[0].question, 'no message in hook payload');
-    assert.equal(b.items[0].notificationType, 'not tracked');
+  test('notification: an omitted notification_type or repo renders the fixed fallback copy; question is null when absent', () => {
+    const b = intentsBand([intentRun({ session_id: 'sess-1', trigger: 'notification' }, 5)], NOW);
+    assert.equal(b.items[0].question, null);
+    assert.equal(b.items[0].notificationWords, 'not tracked');
     assert.equal(b.items[0].repo, 'repo not tracked');
+  });
+
+  test('notification: a known notification_type renders in words; an unknown one renders raw, not dropped', () => {
+    const known = intentsBand([intentRun({ session_id: 's1', trigger: 'notification', notification_type: 'idle_prompt' }, 5)], NOW);
+    assert.equal(known.items[0].notificationWords, 'idle — waiting for input');
+    const unknown = intentsBand([intentRun({ session_id: 's2', trigger: 'notification', notification_type: 'brand_new_type' }, 5)], NOW);
+    assert.equal(unknown.items[0].notificationWords, 'brand_new_type');
+  });
+
+  test('permission_request: tool_name/action/description carry through; notification-only fields stay null', () => {
+    const b = intentsBand(
+      [
+        intentRun(
+          { session_id: 's1', trigger: 'permission_request', tool_name: 'Bash', action: 'ls -la', description: 'List the directory' },
+          5
+        ),
+      ],
+      NOW
+    );
+    const [item] = b.items;
+    assert.equal(item.toolName, 'Bash');
+    assert.equal(item.action, 'ls -la');
+    assert.equal(item.description, 'List the directory');
+    assert.equal(item.notificationWords, null);
+  });
+
+  test('permission_request: an absent action is null, not a blank string — the board renders the "not projected" copy for it', () => {
+    const b = intentsBand([intentRun({ session_id: 's1', trigger: 'permission_request', tool_name: 'mcp__figma__get_node' }, 5)], NOW);
+    assert.equal(b.items[0].toolName, 'mcp__figma__get_node');
+    assert.equal(b.items[0].action, null);
   });
 
   test('an empty 24h window is a measured zero, not an absent signal', () => {
@@ -242,7 +272,7 @@ describe('blocked sessions — intents band 3', () => {
   });
 
   test('boardState wires intents through unfiltered by the other bands', () => {
-    const runs = [intentRun({ session_id: 'sess-1', question: 'why?' }, 10)];
+    const runs = [intentRun({ session_id: 'sess-1', trigger: 'notification', question: 'why?' }, 10)];
     const b = boardState(base({ intents: runs }), NOW);
     assert.equal(b.intents.items.length, 1);
     assert.equal(b.intents.items[0].question, 'why?');

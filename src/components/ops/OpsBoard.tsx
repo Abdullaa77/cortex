@@ -264,9 +264,31 @@ export default function OpsBoard({ board, onRefresh }: { board: Board; onRefresh
         ) : (
           board.intents.items.map((it) => (
             <div key={it.sessionId + it.askedAt} className="px-3 py-2">
-              <p className="font-mono text-xs text-text-primary">{it.question}</p>
+              {it.trigger === 'permission_request' ? (
+                <>
+                  <p className="font-mono text-xs text-text-primary">
+                    {it.action === null ? (
+                      <>
+                        {it.toolName} — <span className="italic text-text-muted">action not projected for this tool</span>
+                      </>
+                    ) : (
+                      <>
+                        {it.toolName}: <span className="font-mono">{it.action}</span>
+                      </>
+                    )}
+                  </p>
+                  {it.description && (
+                    <p className="font-mono text-[11px] italic text-text-muted">model says: &quot;{it.description}&quot;</p>
+                  )}
+                </>
+              ) : (
+                <>
+                  <p className="font-mono text-xs text-text-primary">{it.notificationWords}</p>
+                  {it.question && <p className="font-mono text-[11px] text-text-muted">{it.question}</p>}
+                </>
+              )}
               <p className="font-mono text-[10px] text-text-muted/60">
-                {it.notificationType} · {it.repo} · {formatAge(it.ageMin)} ago
+                {it.repo} · {formatAge(it.ageMin)} ago
               </p>
             </div>
           ))
