@@ -27,6 +27,7 @@ import type {
   GitlabPayload,
   IntentRequestPayload,
   SessionCheckPayload,
+  WaitState,
   Wave,
   WavesPayload,
 } from './contract.ts';
@@ -95,6 +96,15 @@ export interface WaitingItem {
   ageDays: number;
   noteAgeMin: number;
   inRegistry: boolean;
+  /**
+   * True whenever status is 'parked', regardless of gate. A parked wave with
+   * gate 'none' still renders "parked" as its status label (gate !== 'none'
+   * ? gate : status falls through to status) and must show this badge too —
+   * the badge is separate information from the gate, not conditional on one
+   * being shown alongside it (D7 bug, imcoin-d7-affordability-report,
+   * 2026-09-24: gate 'none' wrongly suppressed the badge).
+   */
+  parkedBadge: boolean;
   /** The note's human-readable one-liner. Slug stays visible regardless. */
   scope: string | null;
   scopeTruncated: boolean;
@@ -118,6 +128,14 @@ export interface IntentItem {
   sessionId: string;
   trigger: 'permission_request' | 'notification';
   /**
+   * Decided by the hook at emit time (contract §5b, 2026-09-24). A row stored
+   * before that amendment carries no wait_state; deriveWaitState below fills
+   * it in from trigger/notification_type. This is what splits band 3 into
+   * "Blocked — needs your answer" and "Idle — close or feed" — an idle row
+   * must never land in the blocked group.
+   */
+  waitState: WaitState;
+  /**
    * permission_request only. The tool name is always present when trigger is
    * permission_request (contract requires it); `action` is null exactly when
    * the hook could not project one for that tool — render the "not
@@ -139,8 +157,11 @@ export interface IntentItem {
 }
 
 export interface IntentsBand {
-  items: IntentItem[];
-  /** How many more matched the 24h window beyond the `items` cap. 0 when none. */
+  /** BLOCKED = permission_request, or notification with agent_needs_input|elicitation_dialog. */
+  blocked: IntentItem[];
+  /** IDLE = notification idle_prompt only. Never mixed into `blocked`. */
+  idle: IntentItem[];
+  /** How many more matched the 24h window beyond the combined cap. 0 when none. */
   moreCount: number;
 }
 
@@ -350,6 +371,7 @@ export function waitingBand(waves: Wave[], now: Date): WaitingItem[] {
         ageDays: daysBetween(w.started, now),
         noteAgeMin: ageMinutes(w.note_mtime, now),
         inRegistry: w.in_registry,
+        parkedBadge: w.status === 'parked',
         scope: w.scope ?? null,
         scopeTruncated: w.scope_truncated === true,
         claimed,
@@ -389,16 +411,30 @@ const NOTIFICATION_WORDS: Record<string, string> = {
 export const ACTION_WITHHELD = '<command withheld — may contain a credential>';
 export const DESCRIPTION_WITHHELD = '<description withheld — may contain a credential>';
 
+/**
+ * Rows stored before the 2026-09-24 wait_state amendment carry no wait_state
+ * at all: derive it from the fields that did exist then. idle_prompt is the
+ * only IDLE trigger; a permission_request, any other notification_type, or
+ * no notification_type at all, is BLOCKED (contract §5b: BLOCKED = something
+ * waits on an answer; IDLE = notification idle_prompt only, turn finished).
+ */
+export function deriveWaitState(p: IntentRequestPayload): WaitState {
+  if (p.wait_state) return p.wait_state;
+  return p.trigger === 'notification' && p.notification_type === 'idle_prompt' ? 'idle' : 'blocked';
+}
+
 export function intentsBand(runs: StoredRun<IntentRequestPayload>[], now: Date): IntentsBand {
   const inWindow = runs.filter((r) => now.getTime() - Date.parse(r.payload.asked_at) <= INTENTS_WINDOW_MS);
   inWindow.sort((a, b) => Date.parse(b.payload.asked_at) - Date.parse(a.payload.asked_at));
-  const items = inWindow.slice(0, INTENTS_CAP).map((r) => {
+  const capped = inWindow.slice(0, INTENTS_CAP);
+  const items = capped.map((r) => {
     const p = r.payload;
     const isPermission = p.trigger === 'permission_request';
     const action = isPermission ? (p.action ?? null) : null;
     return {
       sessionId: p.session_id,
       trigger: p.trigger,
+      waitState: deriveWaitState(p),
       toolName: isPermission ? (p.tool_name ?? null) : null,
       action,
       actionWithheld: action === ACTION_WITHHELD,
@@ -410,7 +446,11 @@ export function intentsBand(runs: StoredRun<IntentRequestPayload>[], now: Date):
       ageMin: ageMinutes(p.asked_at, now),
     };
   });
-  return { items, moreCount: Math.max(0, inWindow.length - items.length) };
+  return {
+    blocked: items.filter((i) => i.waitState === 'blocked'),
+    idle: items.filter((i) => i.waitState === 'idle'),
+    moreCount: Math.max(0, inWindow.length - items.length),
+  };
 }
 
 /** repo!iid → wave slug, and repo@sha-prefix → wave slug. The join lives here, not in the producer. */

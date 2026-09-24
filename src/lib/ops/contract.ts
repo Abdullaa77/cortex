@@ -27,6 +27,16 @@ export const WAITING_CAP = 240;
 export type Kind = 'session_check' | 'waves' | 'gitlab' | 'intent_request';
 export type CheckState = 'ok' | 'drift' | 'pending' | 'red' | 'unknown' | 'not_deployed';
 export type CheckMethod = 'exact' | 'timing_proxy' | 'query' | 'heartbeat' | 'probe';
+/**
+ * §5b, 2026-09-24 amendment. Decided by the hook at emit time, never
+ * recomputed here: BLOCKED = trigger permission_request, or notification
+ * with notification_type agent_needs_input|elicitation_dialog (something
+ * waits on an answer). IDLE = notification idle_prompt only (turn finished,
+ * nothing waiting). Required on every new intent_request — rows stored
+ * before this amendment have no wait_state; the board derives it from the
+ * stored trigger/notification_type for those (see board.ts).
+ */
+export type WaitState = 'blocked' | 'idle';
 
 export interface CheckValues {
   head_sha?: string;
@@ -169,6 +179,14 @@ export interface IntentRequestPayload {
   session_id: string;
   /** Which hook fired. REQUIRED. Gates which of the fields below are valid. */
   trigger: 'permission_request' | 'notification';
+  /**
+   * §5b, 2026-09-24 amendment. REQUIRED on every new intent_request — the
+   * validator enforces that at ingest (see intentRequest() below). Optional
+   * here in the TS shape only because a row stored before the amendment has
+   * no such key at all; that is exactly the case the board's
+   * legacy-derivation path (board.ts, deriveWaitState) exists to handle.
+   */
+  wait_state?: WaitState;
   /** permission_request only. Hook tool_name verbatim; [A-Za-z0-9_.:-], ≤ 80 (e.g. "Bash"). */
   tool_name?: string;
   /**
@@ -443,7 +461,7 @@ function intentRequest(c: Collector, p: string, x: unknown) {
     c,
     p,
     x,
-    ['session_id', 'trigger', 'asked_at'],
+    ['session_id', 'trigger', 'wait_state', 'asked_at'],
     [
       'tool_name',
       'action',
@@ -461,6 +479,7 @@ function intentRequest(c: Collector, p: string, x: unknown) {
   if (!o) return;
   str(c, `${p}.session_id`, o.session_id, { re: /^[A-Za-z0-9_-]+$/, max: 128 });
   oneOf(c, `${p}.trigger`, o.trigger, ['permission_request', 'notification']);
+  oneOf(c, `${p}.wait_state`, o.wait_state, ['blocked', 'idle']);
 
   str(c, `${p}.tool_name`, o.tool_name, { re: /^[A-Za-z0-9_.:-]+$/, max: 80 });
   str(c, `${p}.action`, o.action, { max: WAITING_CAP });

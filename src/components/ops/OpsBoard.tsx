@@ -1,7 +1,7 @@
 'use client';
 
 import { AlertCircle, Lock, RefreshCw } from 'lucide-react';
-import type { Board, CheckView, Freshness, Tone, Tracked } from '@/lib/ops/board';
+import type { Board, CheckView, Freshness, IntentItem, Tone, Tracked } from '@/lib/ops/board';
 import { formatAge } from '@/lib/ops/board';
 
 /**
@@ -124,6 +124,66 @@ function Band<T>({ data, children }: { data: Tracked<T>; children: (v: T) => Rea
   return <Panel>{data.tracked ? children(data.value) : <NotTracked reason={data.reason} />}</Panel>;
 }
 
+/** One blocked-sessions row — same shape for both the Blocked and Idle groups. */
+function IntentRow({ it }: { it: IntentItem }) {
+  return (
+    <div className="px-3 py-2">
+      {it.trigger === 'permission_request' ? (
+        <>
+          <p className="font-mono text-xs text-text-primary">
+            {it.action === null ? (
+              <>
+                {it.toolName} — <span className="italic text-text-muted">action not projected for this tool</span>
+              </>
+            ) : it.actionWithheld ? (
+              <>
+                {it.toolName}: <span className="italic text-text-muted">{it.action}</span>
+              </>
+            ) : (
+              <>
+                {it.toolName}: <span className="font-mono">{it.action}</span>
+              </>
+            )}
+          </p>
+          {it.description && (
+            <p className="font-mono text-[11px] italic text-text-muted">model says: &quot;{it.description}&quot;</p>
+          )}
+        </>
+      ) : (
+        <>
+          <p className="font-mono text-xs text-text-primary">{it.notificationWords}</p>
+          {it.question && <p className="font-mono text-[11px] text-text-muted">{it.question}</p>}
+        </>
+      )}
+      <p className="font-mono text-[10px] text-text-muted/60">
+        {it.repo} · {formatAge(it.ageMin)} ago
+      </p>
+    </div>
+  );
+}
+
+/**
+ * A sub-heading inside the "Blocked sessions" panel, splitting band 3 into
+ * "Blocked — needs your answer" and "Idle — close or feed" (contract §5b,
+ * 2026-09-24 wait_state amendment). An idle row must never render under the
+ * Blocked heading — board.ts's intentsBand() already partitions items by
+ * waitState, so this component only ever sees the group it was given.
+ */
+function IntentGroup({ title, items, emptyCopy }: { title: string; items: IntentItem[]; emptyCopy: string }) {
+  return (
+    <div>
+      <p className="px-3 pt-2 font-mono text-[10px] font-semibold uppercase tracking-[2px] text-text-muted/70">
+        {title} {items.length > 0 && `(${items.length})`}
+      </p>
+      {items.length === 0 ? (
+        <p className="px-3 py-1.5 font-mono text-[11px] italic text-text-muted/50">{emptyCopy}</p>
+      ) : (
+        items.map((it) => <IntentRow key={it.sessionId + it.askedAt} it={it} />)
+      )}
+    </div>
+  );
+}
+
 export default function OpsBoard({ board, onRefresh }: { board: Board; onRefresh: () => void }) {
   const hb = board.heartbeat;
   return (
@@ -211,8 +271,10 @@ export default function OpsBoard({ board, onRefresh }: { board: Board; onRefresh
                   </span>
                   {/* A parked wave stays visible as parked even when a gate string is already
                       shown above (a shown gate is what kept it in the set; "parked" is separate
-                      information from the gate). */}
-                  {w.status === 'parked' && w.gate !== 'none' && (
+                      information from the gate). Driven by w.parkedBadge (board.ts), not
+                      recomputed here — gate 'none' used to suppress this badge wrongly (D7,
+                      imcoin-d7-affordability-report, 2026-09-24). */}
+                  {w.parkedBadge && (
                     <span className="rounded border border-border/60 px-1 text-[10px] uppercase tracking-wide text-text-muted">
                       parked
                     </span>
@@ -260,56 +322,32 @@ export default function OpsBoard({ board, onRefresh }: { board: Board; onRefresh
         }
       </Band>
 
-      <SectionHeader
-        title="Blocked sessions"
-        note={`(${board.intents.items.length}${board.intents.moreCount > 0 ? ` +${board.intents.moreCount} more` : ''})`}
-      />
-      <Panel>
-        {board.intents.items.length === 0 ? (
-          <p className="px-3 py-2 font-mono text-[11px] text-text-muted">no session blocked on you in the last 24h</p>
-        ) : (
-          board.intents.items.map((it) => (
-            <div key={it.sessionId + it.askedAt} className="px-3 py-2">
-              {it.trigger === 'permission_request' ? (
-                <>
-                  <p className="font-mono text-xs text-text-primary">
-                    {it.action === null ? (
-                      <>
-                        {it.toolName} — <span className="italic text-text-muted">action not projected for this tool</span>
-                      </>
-                    ) : it.actionWithheld ? (
-                      <>
-                        {it.toolName}: <span className="italic text-text-muted">{it.action}</span>
-                      </>
-                    ) : (
-                      <>
-                        {it.toolName}: <span className="font-mono">{it.action}</span>
-                      </>
-                    )}
-                  </p>
-                  {it.description && (
-                    <p className="font-mono text-[11px] italic text-text-muted">model says: &quot;{it.description}&quot;</p>
-                  )}
-                </>
+      {(() => {
+        const { blocked, idle, moreCount } = board.intents;
+        const total = blocked.length + idle.length;
+        return (
+          <>
+            <SectionHeader
+              title="Blocked sessions"
+              note={`(${total}${moreCount > 0 ? ` +${moreCount} more` : ''})`}
+            />
+            <Panel>
+              {total === 0 ? (
+                <p className="px-3 py-2 font-mono text-[11px] text-text-muted">no session blocked on you in the last 24h</p>
               ) : (
                 <>
-                  <p className="font-mono text-xs text-text-primary">{it.notificationWords}</p>
-                  {it.question && <p className="font-mono text-[11px] text-text-muted">{it.question}</p>}
+                  <IntentGroup title="Blocked — needs your answer" items={blocked} emptyCopy="none blocked" />
+                  <IntentGroup title="Idle — close or feed" items={idle} emptyCopy="none idle" />
                 </>
               )}
-              <p className="font-mono text-[10px] text-text-muted/60">
-                {it.repo} · {formatAge(it.ageMin)} ago
+              {moreCount > 0 && <p className="px-3 py-1.5 font-mono text-[10px] text-text-muted/60">{moreCount} more</p>}
+              <p className="px-3 py-1.5 font-mono text-[10px] italic text-text-muted/50">
+                answer tracking arrives in step 3 — a row may already have been answered at the terminal
               </p>
-            </div>
-          ))
-        )}
-        {board.intents.moreCount > 0 && (
-          <p className="px-3 py-1.5 font-mono text-[10px] text-text-muted/60">{board.intents.moreCount} more</p>
-        )}
-        <p className="px-3 py-1.5 font-mono text-[10px] italic text-text-muted/50">
-          answer tracking arrives in step 3 — a row may already have been answered at the terminal
-        </p>
-      </Panel>
+            </Panel>
+          </>
+        );
+      })()}
 
       <SectionHeader title="Ready to merge" />
       <Band data={board.ready}>

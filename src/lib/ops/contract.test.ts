@@ -191,6 +191,7 @@ describe('contract v1, 2026-09-24 additions — kind: intent_request', () => {
     envelopeOf('intent_request', {
       session_id: 'sess-abc123',
       trigger: 'notification',
+      wait_state: 'blocked',
       notification_type: 'agent_needs_input',
       question: 'merge admin-ui!145 now or after !402 deploys?',
       asked_at: '2026-09-24T10:00:00Z',
@@ -201,6 +202,7 @@ describe('contract v1, 2026-09-24 additions — kind: intent_request', () => {
     envelopeOf('intent_request', {
       session_id: 'sess-abc123',
       trigger: 'permission_request',
+      wait_state: 'blocked',
       tool_name: 'Bash',
       action: 'curl -s -o /dev/null https://example.com/probe-cd34',
       description: 'Probe example.com endpoint silently',
@@ -208,21 +210,42 @@ describe('contract v1, 2026-09-24 additions — kind: intent_request', () => {
       repo: 'cortex',
     });
 
-  test('a fully-populated notification and a fully-populated permission_request are both accepted; a minimal one (session_id + trigger + asked_at only) is too', () => {
+  test('a fully-populated notification and a fully-populated permission_request are both accepted; a minimal one (session_id + trigger + wait_state + asked_at only) is too', () => {
     assert.deepEqual(errorsOf(valid()), []);
     assert.deepEqual(errorsOf(permission()), []);
     assert.deepEqual(
-      errorsOf(envelopeOf('intent_request', { session_id: 'sess-1', trigger: 'notification', asked_at: '2026-09-24T10:00:00Z' })),
+      errorsOf(
+        envelopeOf('intent_request', {
+          session_id: 'sess-1',
+          trigger: 'notification',
+          wait_state: 'idle',
+          asked_at: '2026-09-24T10:00:00Z',
+        })
+      ),
       []
     );
   });
 
-  test('session_id, trigger and asked_at are required', () => {
+  test('session_id, trigger, wait_state and asked_at are required', () => {
     assert.deepEqual(errorsOf(envelopeOf('intent_request', {})), [
       '$.payload.session_id: required',
       '$.payload.trigger: required',
+      '$.payload.wait_state: required',
       '$.payload.asked_at: required',
     ]);
+  });
+
+  test('wait_state must be blocked or idle — missing or bogus is refused, valid passes', () => {
+    const missing = valid();
+    delete (missing.payload as Record<string, unknown>).wait_state;
+    assert.deepEqual(errorsOf(missing), ['$.payload.wait_state: required']);
+    const bogus = valid();
+    (bogus.payload as Record<string, unknown>).wait_state = 'bogus';
+    assert.deepEqual(errorsOf(bogus), ['$.payload.wait_state: must be one of blocked|idle']);
+    const idle = valid();
+    (idle.payload as Record<string, unknown>).notification_type = 'idle_prompt';
+    (idle.payload as Record<string, unknown>).wait_state = 'idle';
+    assert.deepEqual(errorsOf(idle), []);
   });
 
   test('session_id, notification_type and tool_name reject characters outside their pattern', () => {
@@ -244,6 +267,7 @@ describe('contract v1, 2026-09-24 additions — kind: intent_request', () => {
     const orphan = envelopeOf('intent_request', {
       session_id: 'sess-1',
       trigger: 'notification',
+      wait_state: 'blocked',
       asked_at: '2026-09-24T10:00:00Z',
       question_truncated: true,
     });
@@ -257,6 +281,7 @@ describe('contract v1, 2026-09-24 additions — kind: intent_request', () => {
     const orphan = envelopeOf('intent_request', {
       session_id: 'sess-1',
       trigger: 'permission_request',
+      wait_state: 'blocked',
       tool_name: 'Bash',
       asked_at: '2026-09-24T10:00:00Z',
       action_truncated: true,
@@ -271,6 +296,7 @@ describe('contract v1, 2026-09-24 additions — kind: intent_request', () => {
     const orphan = envelopeOf('intent_request', {
       session_id: 'sess-1',
       trigger: 'permission_request',
+      wait_state: 'blocked',
       tool_name: 'Bash',
       asked_at: '2026-09-24T10:00:00Z',
       description_truncated: true,
