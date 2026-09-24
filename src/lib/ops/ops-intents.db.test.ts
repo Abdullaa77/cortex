@@ -36,6 +36,11 @@ const STUB = `
     AS $$ SELECT nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
   GRANT USAGE ON SCHEMA auth TO anon, authenticated;
   GRANT USAGE ON SCHEMA public TO anon, authenticated;
+  -- Supabase grants EXECUTE on every new public function to the API roles by
+  -- default privilege, so REVOKE … FROM PUBLIC alone leaves them callable.
+  -- Measured on the live project 2026-09-24: 015's first cut left anon holding
+  -- EXECUTE on ops_intent_answer. The fixture mirrors that, or it proves nothing.
+  ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO anon, authenticated;
   INSERT INTO auth.users (id) VALUES ('${SCOTT}'), ('${OTHER}');
 `;
 

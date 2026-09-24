@@ -259,6 +259,10 @@ DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
     -- Answering needs a signed-in user (auth.uid()); anon gets nothing.
+    -- Explicitly, because REVOKE … FROM PUBLIC does not undo Supabase's
+    -- default-privilege grant to anon (measured on the live project: the
+    -- first cut of this file left anon holding EXECUTE here).
+    EXECUTE 'REVOKE EXECUTE ON FUNCTION public.ops_intent_answer(UUID, INT, TEXT) FROM anon';
     EXECUTE 'GRANT EXECUTE ON FUNCTION public.ops_intent_answer(UUID, INT, TEXT) TO authenticated';
     -- The daemon holds only the anon key + the ingest token, like the producers.
     EXECUTE 'GRANT EXECUTE ON FUNCTION public.ops_intents_pending(TEXT) TO anon, authenticated';
