@@ -140,7 +140,7 @@ function AnswerLine({ a }: { a: IntentAnswerView }) {
     a.status === 'applied'
       ? `delivered — session recorded it ${formatAge(a.appliedAgeMin ?? 0)} ago`
       : a.status === 'parked'
-        ? 'session parked before delivery — the answer goes to the wave note'
+        ? 'session had parked — answer written to the wave note'
         : 'answered — waiting for delivery';
   const tone: Tone = a.status === 'applied' ? 'green' : 'amber';
   return (
@@ -287,6 +287,11 @@ function IntentRow({ it, onAnswer }: { it: IntentItem; onAnswer: OnAnswer }) {
       <p className="font-mono text-[10px] text-text-muted/60">
         {it.repo} · {formatAge(it.ageMin)} ago
       </p>
+      {it.parkedAgeMin !== null && (
+        <p className="font-mono text-[10px]" style={{ color: TONE_COLOR.amber }}>
+          no answer in 60m — session told to park {formatAge(it.parkedAgeMin)} ago; an answer now goes to its wave note
+        </p>
+      )}
       {it.answer ? (
         <AnswerLine a={it.answer} />
       ) : it.answerable.ok ? (

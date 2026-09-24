@@ -12,6 +12,7 @@ const base = (over: Partial<BoardInput> = {}): BoardInput => ({
   apiSamples: [],
   intents: [],
   answers: [],
+  parks: [],
   ...over,
 });
 
@@ -453,5 +454,23 @@ describe('answers — the return path (015, §5c)', () => {
     const run = intentRun({ session_id: 's', trigger: 'notification' }, 5);
     const b = boardState(base({ intents: [run], answers: [answer(run.run_id)] }), NOW);
     assert.equal(b.intents.blocked[0].answer!.status, 'pending');
+  });
+});
+
+describe('parks — the 60-minute path (017)', () => {
+  test('a parked run carries its park age; others are null; answer state is independent', () => {
+    const parked = intentRun({ session_id: 'p', trigger: 'notification' }, 70);
+    const plain = intentRun({ session_id: 'q', trigger: 'notification' }, 70);
+    const b = intentsBand([parked, plain], NOW, [], [{ run_id: parked.run_id, parked_at: minutesAgo(8) }]);
+    const byRun = new Map(b.blocked.map((i) => [i.runId, i]));
+    assert.equal(byRun.get(parked.run_id)!.parkedAgeMin, 8);
+    assert.equal(byRun.get(plain.run_id)!.parkedAgeMin, null);
+    assert.equal(byRun.get(parked.run_id)!.answer, null);
+  });
+
+  test('boardState passes input.parks through', () => {
+    const run = intentRun({ session_id: 's', trigger: 'notification' }, 70);
+    const b = boardState(base({ intents: [run], parks: [{ run_id: run.run_id, parked_at: minutesAgo(3) }] }), NOW);
+    assert.equal(b.intents.blocked[0].parkedAgeMin, 3);
   });
 });

@@ -256,6 +256,12 @@ export interface StoredAnswer {
   applied_at: string | null;
 }
 
+/** An ops_intent_parks row (017): the session was told to park, and its transcript shows it. */
+export interface StoredPark {
+  run_id: string;
+  parked_at: string;
+}
+
 /**
  * One row of `GET /api/ops/intents` — what the dev-box daemon delivers.
  * session_id is the reply-to; there is no cwd (contract §5b): the daemon
@@ -273,6 +279,8 @@ export interface PendingIntent {
   asked_at: string;
   answer: string;
   answered_at: string;
+  /** 017: set when the session parked — deliver to the wave note, never the session. */
+  parked_at: string | null;
 }
 
 export interface Envelope<K extends Kind = Kind> {
