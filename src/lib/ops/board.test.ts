@@ -1,7 +1,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { boardState, freshness, readyBand, rollup, waitingBand, type BoardInput } from './board.ts';
-import { CONTROL_CHECKS, LIVE_CHECKS, NOW, GITLAB, WAVES, gitlabRun, minutesAgo, sessionRun, wavesRun } from './__fixtures__/runs.ts';
+import { boardState, CLAIMED_STALE_SECONDS, freshness, intentsBand, readyBand, rollup, waitingBand, type BoardInput } from './board.ts';
+import { CONTROL_CHECKS, LIVE_CHECKS, NOW, GITLAB, WAVES, gitlabRun, intentRun, minutesAgo, sessionRun, wave, wavesRun } from './__fixtures__/runs.ts';
 
 const base = (over: Partial<BoardInput> = {}): BoardInput => ({
   reach: { ok: true },
@@ -10,6 +10,7 @@ const base = (over: Partial<BoardInput> = {}): BoardInput => ({
   waves: wavesRun(),
   gitlab: gitlabRun(),
   apiSamples: [],
+  intents: [],
   ...over,
 });
 
@@ -150,5 +151,100 @@ describe('ready to merge — persistent, oldest first, joined Cortex-side', () =
 
   test('a repo with no prod SHA says its commit list is untracked, not empty', () => {
     assert.deepEqual(r.commitsUntracked, [{ repo: 'mini-apps', reason: 'prod SHA unknown' }]);
+  });
+});
+
+describe('waiting on you — 2026-09-24 additions (parked, scope, claimed, shippable)', () => {
+  test('a parked wave that still holds a gate or a waiting_on_scott stays in the set', () => {
+    const w = waitingBand([wave({ slug: 'parked-gated', status: 'parked', gate: 'do-not-run' })], NOW);
+    assert.deepEqual(w.map((x) => x.slug), ['parked-gated']);
+    assert.equal(w[0].status, 'parked');
+  });
+
+  test('scope renders alongside the slug when present; absent is null, not ""', () => {
+    const [withScope] = waitingBand([wave({ slug: 'a', gate: 'do-not-run', scope: 'one-line human title', scope_truncated: true })], NOW);
+    assert.equal(withScope.scope, 'one-line human title');
+    assert.equal(withScope.scopeTruncated, true);
+    const [noScope] = waitingBand([wave({ slug: 'b', gate: 'do-not-run' })], NOW);
+    assert.equal(noScope.scope, null);
+    assert.equal(noScope.scopeTruncated, false);
+  });
+
+  test('claimed=true renders an age; claimed=false and absent both carry no age — only claimed:true is a badge', () => {
+    const [claimed] = waitingBand([wave({ slug: 'a', gate: 'do-not-run', claimed: true, claimed_age_seconds: 300 })], NOW);
+    assert.equal(claimed.claimed, true);
+    assert.equal(claimed.claimedAgeSeconds, 300);
+    const [notClaimed] = waitingBand([wave({ slug: 'b', gate: 'do-not-run', claimed: false })], NOW);
+    assert.equal(notClaimed.claimed, false);
+    assert.equal(notClaimed.claimedAgeSeconds, null);
+    const [absent] = waitingBand([wave({ slug: 'c', gate: 'do-not-run' })], NOW);
+    assert.equal(absent.claimed, null);
+    assert.equal(absent.claimedAgeSeconds, null);
+  });
+
+  test('lease stale threshold is exactly 14400s — 14399 fresh, 14400 stale', () => {
+    assert.equal(CLAIMED_STALE_SECONDS, 14400);
+    const [fresh] = waitingBand([wave({ slug: 'a', gate: 'do-not-run', claimed: true, claimed_age_seconds: 14399 })], NOW);
+    assert.equal(fresh.claimedStale, false);
+    const [stale] = waitingBand([wave({ slug: 'b', gate: 'do-not-run', claimed: true, claimed_age_seconds: 14400 })], NOW);
+    assert.equal(stale.claimedStale, true);
+  });
+
+  test('shippable=true renders a checked age; false and absent both render nothing (null)', () => {
+    const [yes] = waitingBand(
+      [wave({ slug: 'a', gate: 'do-not-run', shippable: true, shippable_checked_at: minutesAgo(12) })],
+      NOW
+    );
+    assert.equal(yes.shippable, true);
+    assert.equal(yes.shippableCheckedAgeMin, 12);
+    const [no] = waitingBand([wave({ slug: 'b', gate: 'do-not-run', shippable: false })], NOW);
+    assert.equal(no.shippable, false);
+    assert.equal(no.shippableCheckedAgeMin, null);
+    const [absent] = waitingBand([wave({ slug: 'c', gate: 'do-not-run' })], NOW);
+    assert.equal(absent.shippable, null);
+    assert.equal(absent.shippableCheckedAgeMin, null);
+  });
+});
+
+describe('blocked sessions — intents band 3', () => {
+  test('newest first', () => {
+    const older = intentRun({ session_id: 'sess-1', question: 'older' }, 120);
+    const newer = intentRun({ session_id: 'sess-2', question: 'newer' }, 5);
+    const b = intentsBand([older, newer], NOW);
+    assert.deepEqual(b.items.map((i) => i.sessionId), ['sess-2', 'sess-1']);
+  });
+
+  test('capped at 50, with an exact "more" count', () => {
+    const runs = Array.from({ length: 63 }, (_, i) => intentRun({ session_id: `sess-${i}` }, i));
+    const b = intentsBand(runs, NOW);
+    assert.equal(b.items.length, 50);
+    assert.equal(b.moreCount, 13);
+  });
+
+  test('outside the 24h window is dropped entirely, not just uncounted', () => {
+    const inWindow = intentRun({ session_id: 'in' }, 60);
+    const outOfWindow = intentRun({ session_id: 'out' }, 25 * 60);
+    const b = intentsBand([inWindow, outOfWindow], NOW);
+    assert.deepEqual(b.items.map((i) => i.sessionId), ['in']);
+    assert.equal(b.moreCount, 0);
+  });
+
+  test('an omitted question, notification_type or repo renders the fixed fallback copy', () => {
+    const b = intentsBand([intentRun({ session_id: 'sess-1' }, 5)], NOW);
+    assert.equal(b.items[0].question, 'no message in hook payload');
+    assert.equal(b.items[0].notificationType, 'not tracked');
+    assert.equal(b.items[0].repo, 'repo not tracked');
+  });
+
+  test('an empty 24h window is a measured zero, not an absent signal', () => {
+    const b = boardState(base({ intents: [] }), NOW);
+    assert.deepEqual(b.intents, { items: [], moreCount: 0 });
+  });
+
+  test('boardState wires intents through unfiltered by the other bands', () => {
+    const runs = [intentRun({ session_id: 'sess-1', question: 'why?' }, 10)];
+    const b = boardState(base({ intents: runs }), NOW);
+    assert.equal(b.intents.items.length, 1);
+    assert.equal(b.intents.items[0].question, 'why?');
   });
 });
