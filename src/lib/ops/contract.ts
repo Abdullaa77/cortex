@@ -24,7 +24,7 @@ export const CONTRACT_VERSION = 1;
 export const MAX_BODY_BYTES = 256 * 1024;
 export const WAITING_CAP = 240;
 
-export type Kind = 'session_check' | 'waves' | 'gitlab';
+export type Kind = 'session_check' | 'waves' | 'gitlab' | 'intent_request';
 export type CheckState = 'ok' | 'drift' | 'pending' | 'red' | 'unknown' | 'not_deployed';
 export type CheckMethod = 'exact' | 'timing_proxy' | 'query' | 'heartbeat' | 'probe';
 
@@ -73,7 +73,10 @@ export interface Wave {
   repos: string[];
   /** Omitted when the note records none — absent, not "". */
   branch?: string;
-  status: 'planned' | 'in-flight' | 'blocked' | 'shipped';
+  status: 'planned' | 'in-flight' | 'blocked' | 'shipped' | 'parked';
+  /** The note's frontmatter `scope`, ≤ 240 chars. Omitted when the note has none — never "". */
+  scope?: string;
+  scope_truncated?: true;
   gate: 'none' | 'awaiting-confirm' | 'do-not-run' | 'idle-no-writes';
   blocked_by: string[];
   waiting_on_scott?: string;
@@ -86,6 +89,24 @@ export interface Wave {
   issues: string[];
   note_mtime: string;
   in_registry: boolean;
+  /**
+   * A claim file exists (live OR lapsed lease). Omitted only when the claims
+   * directory could not be read — never the holder's name.
+   */
+  claimed?: boolean;
+  /**
+   * Contract prose: "REQUIRED when claimed=true and the claim is readable;
+   * FORBIDDEN otherwise." The envelope carries no separate "readable" flag,
+   * so this validator checks the half it can actually observe: FORBIDDEN
+   * when claimed is not true, and merely OPTIONAL (not required) when
+   * claimed=true — a producer that read claimed=true but failed to read the
+   * claim's timestamp is not a schema violation.
+   */
+  claimed_age_seconds?: number;
+  /** Registry rows with ≥1 MR only. Omitted when there are no MRs, or any MR's state is unknown/uncached. */
+  shippable?: boolean;
+  /** REQUIRED iff `shippable` is present (whatever its value). */
+  shippable_checked_at?: string;
 }
 
 export interface WavesPayload {
@@ -130,20 +151,51 @@ export interface GitlabPayload {
   repos: GitlabRepo[];
 }
 
+/** §5b. One per Claude Code Notification hook firing. Producer: intent-hook. */
+export interface IntentRequestPayload {
+  /** Hook payload session_id, verbatim; [A-Za-z0-9_-], ≤ 128. The reply-to address for the daemon. */
+  session_id: string;
+  /** Hook payload notification_type, verbatim; [a-z_], ≤ 40. Free string on purpose — a new
+   *  Claude Code type must not 422. Omit + `untracked` when the hook payload has none. */
+  notification_type?: string;
+  /** Hook payload `message`, VERBATIM, cut at 240 chars. NO content filter. Omit + `untracked`
+   *  when the payload carries no message. */
+  question?: string;
+  question_truncated?: true;
+  asked_at: string;
+  /** Tail of the cwd's git `origin` URL, e.g. "main-backend". [A-Za-z0-9._-], ≤ 80. Never a
+   *  path. Omit + `untracked` when cwd is not a git checkout or has no origin. */
+  repo?: string;
+  /** Omitted in v1 (not derivable yet) with `untracked`. */
+  wave_slug?: string;
+  untracked?: Record<string, string>;
+}
+
 export interface Envelope<K extends Kind = Kind> {
   v: 1;
   kind: K;
   run_id: string;
-  producer: { name: 'session-check' | 'wave' | 'gitlab-poll'; host: string; version: string };
+  producer: { name: 'session-check' | 'wave' | 'gitlab-poll' | 'intent-hook'; host: string; version: string };
   started_at: string;
   finished_at: string;
-  payload: K extends 'session_check' ? SessionCheckPayload : K extends 'waves' ? WavesPayload : GitlabPayload;
+  payload: K extends 'session_check'
+    ? SessionCheckPayload
+    : K extends 'waves'
+      ? WavesPayload
+      : K extends 'gitlab'
+        ? GitlabPayload
+        : IntentRequestPayload;
 }
 
 export type Validation = { ok: true; envelope: Envelope } | { ok: false; errors: string[] };
 
-/** Keys refused by name anywhere in a payload. Mirrors ops_private.forbidden_key (013). */
-export const FORBIDDEN_KEYS = ['body', 'note', 'content', 'markdown', 'worktree', 'chat', 'source_line'];
+/**
+ * Keys refused by name anywhere in a payload. Mirrors ops_private.forbidden_key
+ * (013, widened by 014). `cwd` and `transcript_path` are local-machine detail —
+ * CORTEX-INTENTS.md §5 lists `cwd` on the intent shape, but the contract keeps
+ * local paths off this box; the hook writes it to a local sidecar instead.
+ */
+export const FORBIDDEN_KEYS = ['body', 'note', 'content', 'markdown', 'worktree', 'chat', 'source_line', 'cwd', 'transcript_path'];
 
 // ---------------------------------------------------------------- primitives
 
@@ -295,7 +347,20 @@ function wave(c: Collector, p: string, x: unknown) {
     p,
     x,
     ['slug', 'title', 'repos', 'status', 'gate', 'blocked_by', 'started', 'mrs', 'shas', 'issues', 'note_mtime', 'in_registry'],
-    ['family', 'branch', 'waiting_on_scott', 'waiting_on_scott_truncated', 'shipped_on', 'reviewed_on']
+    [
+      'family',
+      'branch',
+      'scope',
+      'scope_truncated',
+      'waiting_on_scott',
+      'waiting_on_scott_truncated',
+      'shipped_on',
+      'reviewed_on',
+      'claimed',
+      'claimed_age_seconds',
+      'shippable',
+      'shippable_checked_at',
+    ]
   );
   if (!o) return;
   str(c, `${p}.slug`, o.slug, { max: 200 });
@@ -304,7 +369,10 @@ function wave(c: Collector, p: string, x: unknown) {
   str(c, `${p}.family`, o.family, { max: 80 });
   str(c, `${p}.branch`, o.branch, { max: 200 });
   list(c, `${p}.repos`, o.repos, (q, v) => str(c, q, v, { max: 80 }));
-  oneOf(c, `${p}.status`, o.status, ['planned', 'in-flight', 'blocked', 'shipped']);
+  oneOf(c, `${p}.status`, o.status, ['planned', 'in-flight', 'blocked', 'shipped', 'parked']);
+  str(c, `${p}.scope`, o.scope, { max: WAITING_CAP });
+  if (o.scope_truncated !== undefined && o.scope_truncated !== true) c.add(`${p}.scope_truncated`, 'must be true, or omitted');
+  if (o.scope_truncated === true && o.scope === undefined) c.add(`${p}.scope_truncated`, 'set without scope');
   oneOf(c, `${p}.gate`, o.gate, ['none', 'awaiting-confirm', 'do-not-run', 'idle-no-writes']);
   list(c, `${p}.blocked_by`, o.blocked_by, (q, v) => str(c, q, v, { max: 200 }));
   str(c, `${p}.waiting_on_scott`, o.waiting_on_scott, { max: WAITING_CAP });
@@ -320,6 +388,42 @@ function wave(c: Collector, p: string, x: unknown) {
   list(c, `${p}.issues`, o.issues, (q, v) => str(c, q, v, { re: ISSUE_REF }));
   str(c, `${p}.note_mtime`, o.note_mtime, { re: ISO_Z });
   bool(c, `${p}.in_registry`, o.in_registry);
+
+  // claimed_age_seconds: see the field comment on Wave in contract.ts for why
+  // this checks only the observable half of the prose rule.
+  bool(c, `${p}.claimed`, o.claimed);
+  int(c, `${p}.claimed_age_seconds`, o.claimed_age_seconds);
+  if (o.claimed !== true && o.claimed_age_seconds !== undefined)
+    c.add(`${p}.claimed_age_seconds`, 'forbidden unless claimed=true');
+
+  bool(c, `${p}.shippable`, o.shippable);
+  str(c, `${p}.shippable_checked_at`, o.shippable_checked_at, { re: ISO_Z });
+  if (o.shippable !== undefined && o.shippable_checked_at === undefined)
+    c.add(`${p}.shippable_checked_at`, 'required when shippable is present');
+  if (o.shippable === undefined && o.shippable_checked_at !== undefined)
+    c.add(`${p}.shippable_checked_at`, 'forbidden without shippable');
+}
+
+function intentRequest(c: Collector, p: string, x: unknown) {
+  const o = shape(
+    c,
+    p,
+    x,
+    ['session_id', 'asked_at'],
+    ['notification_type', 'question', 'question_truncated', 'repo', 'wave_slug', 'untracked']
+  );
+  if (!o) return;
+  str(c, `${p}.session_id`, o.session_id, { re: /^[A-Za-z0-9_-]+$/, max: 128 });
+  str(c, `${p}.notification_type`, o.notification_type, { re: /^[a-z_]+$/, max: 40 });
+  str(c, `${p}.question`, o.question, { max: WAITING_CAP });
+  if (o.question_truncated !== undefined && o.question_truncated !== true)
+    c.add(`${p}.question_truncated`, 'must be true, or omitted');
+  if (o.question_truncated === true && o.question === undefined)
+    c.add(`${p}.question_truncated`, 'set without question');
+  str(c, `${p}.asked_at`, o.asked_at, { re: ISO_Z });
+  str(c, `${p}.repo`, o.repo, { re: /^[A-Za-z0-9._-]+$/, max: 80 });
+  str(c, `${p}.wave_slug`, o.wave_slug, { max: 200 });
+  untracked(c, `${p}.untracked`, o.untracked);
 }
 
 function waves(c: Collector, p: string, x: unknown) {
@@ -397,11 +501,11 @@ export function validateEnvelope(x: unknown, now: Date): Validation {
   if (!o) return { ok: false, errors: c.errors };
 
   if (o.v !== CONTRACT_VERSION) c.add('$.v', `must be ${CONTRACT_VERSION}`);
-  oneOf(c, '$.kind', o.kind, ['session_check', 'waves', 'gitlab']);
+  oneOf(c, '$.kind', o.kind, ['session_check', 'waves', 'gitlab', 'intent_request']);
   str(c, '$.run_id', o.run_id, { re: UUID });
   const pr = shape(c, '$.producer', o.producer, ['name', 'host', 'version']);
   if (pr) {
-    oneOf(c, '$.producer.name', pr.name, ['session-check', 'wave', 'gitlab-poll']);
+    oneOf(c, '$.producer.name', pr.name, ['session-check', 'wave', 'gitlab-poll', 'intent-hook']);
     str(c, '$.producer.host', pr.host, { max: 100 });
     str(c, '$.producer.version', pr.version, { max: 64 });
   }
@@ -417,6 +521,7 @@ export function validateEnvelope(x: unknown, now: Date): Validation {
   if (o.kind === 'session_check') sessionCheck(c, '$.payload', o.payload);
   else if (o.kind === 'waves') waves(c, '$.payload', o.payload);
   else if (o.kind === 'gitlab') gitlab(c, '$.payload', o.payload);
+  else if (o.kind === 'intent_request') intentRequest(c, '$.payload', o.payload);
 
   return c.errors.length ? { ok: false, errors: c.errors } : { ok: true, envelope: o as unknown as Envelope };
 }
