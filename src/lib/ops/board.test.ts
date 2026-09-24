@@ -399,8 +399,8 @@ describe('answers — the return path (015, §5c)', () => {
   const answer = (runId: string, over: Record<string, unknown> = {}) => ({
     id: `ans-${runId}`,
     run_id: runId,
-    stop_item: 1,
-    answer: 'Yes — merge it.',
+    decision: 'choose' as const,
+    answer: 'Option B.',
     answered_at: minutesAgo(4),
     status: 'pending' as const,
     applied_at: null,
@@ -418,27 +418,27 @@ describe('answers — the return path (015, §5c)', () => {
     const second = intentRun({ session_id: 'same', trigger: 'notification', notification_type: 'agent_needs_input' }, 5);
     const b = intentsBand([first, second], NOW, [answer(first.run_id)]);
     const byRun = new Map(b.blocked.map((i) => [i.runId, i]));
-    assert.equal(byRun.get(first.run_id)!.answer!.text, 'Yes — merge it.');
+    assert.equal(byRun.get(first.run_id)!.answer!.text, 'Option B.');
     assert.equal(byRun.get(second.run_id)!.answer, null);
   });
 
-  test('pending vs applied carry their own ages; the stop-list item is in words', () => {
+  test('pending vs applied carry their own ages; the decision kind is in words', () => {
     const r1 = intentRun({ session_id: 'p', trigger: 'notification' }, 20);
     const r2 = intentRun({ session_id: 'a', trigger: 'notification' }, 20);
     const b = intentsBand([r1, r2], NOW, [
       answer(r1.run_id),
-      answer(r2.run_id, { status: 'applied', applied_at: minutesAgo(2), stop_item: 4 }),
+      answer(r2.run_id, { status: 'applied', applied_at: minutesAgo(2), decision: 'clarify' }),
     ]);
     const byRun = new Map(b.blocked.map((i) => [i.runId, i]));
     const p = byRun.get(r1.run_id)!.answer!;
     assert.equal(p.status, 'pending');
     assert.equal(p.answeredAgeMin, 4);
     assert.equal(p.appliedAgeMin, null);
-    assert.match(p.stopWords, /master/);
+    assert.equal(p.decisionWords, 'Choose between the options it gave');
     const a = byRun.get(r2.run_id)!.answer!;
     assert.equal(a.status, 'applied');
     assert.equal(a.appliedAgeMin, 2);
-    assert.equal(a.stopWords, 'Permissions, roles, RBAC');
+    assert.equal(a.decisionWords, 'Clarify what was meant');
   });
 
   test('an idle row takes an answer too (feeding it is the point); a permission prompt does not', () => {

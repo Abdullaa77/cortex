@@ -6,6 +6,7 @@ import { boardState, INTENTS_WINDOW_MS, type Board, type BoardInput, type Reach,
 import {
   ANSWER_CAP,
   type Check,
+  type Decision,
   type GitlabPayload,
   type IntentRequestPayload,
   type SessionCheckPayload,
@@ -50,7 +51,8 @@ export type AnswerResult = { ok: true } | { ok: false; reason: string };
 
 const ANSWER_REFUSALS: Record<string, string> = {
   unauthorized: 'not signed in',
-  not_stop_list: 'pick the stop-list item this falls under — anything else does not belong in the queue',
+  authorization: 'an authorization is never given here — it needs you in the session',
+  not_a_decision: 'pick which kind of decision this is',
   not_found: 'that question is not in the database (or not yours)',
   not_answerable: 'a permission prompt is answered in the terminal',
   already_answered: 'already answered — one answer per question',
@@ -60,7 +62,7 @@ export function useOps(): {
   board: Board | null;
   loading: boolean;
   refetch: () => void;
-  answer: (runId: string, stopItem: number, text: string) => Promise<AnswerResult>;
+  answer: (runId: string, decision: Decision, text: string) => Promise<AnswerResult>;
 } {
   const { supabase, session } = useSupabase();
   const userId = session?.user?.id ?? null;
@@ -100,7 +102,7 @@ export function useOps(): {
         // asked_at (the run's domain time), matching the band's own filter.
         supabase
           .from('ops_intents')
-          .select('id, run_id, stop_item, answer, answered_at, status, applied_at')
+          .select('id, run_id, decision, answer, answered_at, status, applied_at')
           .gte('asked_at', sinceIntents)
           .limit(INTENTS_FETCH_LIMIT),
       ]);
@@ -149,18 +151,19 @@ export function useOps(): {
   }, [fetchAll]);
 
   /**
-   * Scott's answer → ops_intent_answer (015). The database decides — stop-list
-   * item, length, ownership, one answer per question, no permission prompts —
+   * Scott's answer → ops_intent_answer (016). The database decides — decision
+   * kind (never an authorization), length, ownership, one answer per question,
+   * no permission prompts —
    * and this only turns its refusal into words. Refetches on success so the
    * row flips to "answered — waiting for delivery" from the database's own
    * record, not from local state.
    */
   const answer = useCallback(
-    async (runId: string, stopItem: number, text: string): Promise<AnswerResult> => {
+    async (runId: string, decision: Decision, text: string): Promise<AnswerResult> => {
       if (!text.trim() || text.length > ANSWER_CAP) return { ok: false, reason: `answer: 1–${ANSWER_CAP} characters` };
       const { data, error } = await supabase.rpc('ops_intent_answer', {
         p_run_id: runId,
-        p_stop_item: stopItem,
+        p_decision: decision,
         p_answer: text,
       });
       if (error) return { ok: false, reason: classifyFailure(error) };

@@ -218,19 +218,28 @@ export interface IntentRequestPayload {
 }
 
 /**
- * §5c — the return path (migration 015, CORTEX-INTENTS §3/§5). The seven
- * stop-list items (PROTOCOL.md §5) are the only things that may enter the
- * queue; an answer must name one (`stop_item`, 1-based index here). The DB
- * enforces 1–7; these words are the UI's.
+ * §5c — the return path (migrations 015 + 016, CORTEX-INTENTS §3).
+ *
+ * The queue carries DECISIONS, never AUTHORIZATIONS (Scott, 2026-09-24). An
+ * answer names which kind of decision it is; the DB refuses anything else.
+ * Authorizations are given up front in the prompt or in person in the
+ * session — a session that needs one it was not given parks. The UI lists
+ * them only to say so ("needs you in the session"); they are never answerable.
  */
-export const STOP_LIST = [
-  'Merging to main-backend master (the production deploy)',
+export type Decision = 'choose' | 'park_or_continue' | 'clarify';
+export const DECISIONS: readonly { value: Decision; words: string }[] = [
+  { value: 'choose', words: 'Choose between the options it gave' },
+  { value: 'park_or_continue', words: 'Park or continue' },
+  { value: 'clarify', words: 'Clarify what was meant' },
+];
+export const AUTHORIZATIONS = [
+  'Merging to main-backend master',
   'Money',
-  'Writing, deleting or bulk-changing production data',
+  'Writing or bulk-changing production data',
+  'Deleting anything',
   'Permissions, roles, RBAC',
   'Anything staff or students will see change',
-  'Creating any production account',
-  'Two sessions contradicting each other',
+  'Creating a production account',
 ] as const;
 export const ANSWER_CAP = 1000;
 
@@ -240,7 +249,7 @@ export type IntentStatus = 'pending' | 'applied' | 'parked';
 export interface StoredAnswer {
   id: string;
   run_id: string;
-  stop_item: number;
+  decision: Decision;
   answer: string;
   answered_at: string;
   status: IntentStatus;
@@ -257,7 +266,7 @@ export interface PendingIntent {
   run_id: string;
   session_id: string;
   wave_slug: string | null;
-  stop_item: number;
+  decision: Decision;
   question: string | null;
   question_truncated: boolean;
   options: string[] | null;

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { AlertCircle, Lock, RefreshCw } from 'lucide-react';
 import type { Board, CheckView, Freshness, IntentAnswerView, IntentItem, Tone, Tracked } from '@/lib/ops/board';
 import { formatAge } from '@/lib/ops/board';
-import { ANSWER_CAP, STOP_LIST } from '@/lib/ops/contract';
+import { ANSWER_CAP, AUTHORIZATIONS, DECISIONS, type Decision } from '@/lib/ops/contract';
 import type { AnswerResult } from '@/hooks/useOps';
 
 /**
@@ -128,7 +128,7 @@ function Band<T>({ data, children }: { data: Tracked<T>; children: (v: T) => Rea
   return <Panel>{data.tracked ? children(data.value) : <NotTracked reason={data.reason} />}</Panel>;
 }
 
-export type OnAnswer = (runId: string, stopItem: number, text: string) => Promise<AnswerResult>;
+export type OnAnswer = (runId: string, decision: Decision, text: string) => Promise<AnswerResult>;
 
 /**
  * Where an answer stands, from the database's own record. "pending" means
@@ -147,22 +147,22 @@ function AnswerLine({ a }: { a: IntentAnswerView }) {
     <div className="mt-1 border-l-2 pl-2" style={{ borderColor: TONE_COLOR[tone] }}>
       <p className="font-mono text-[11px] text-text-primary whitespace-pre-wrap">{a.text}</p>
       <p className="font-mono text-[10px] text-text-muted">
-        <span style={{ color: TONE_COLOR[tone] }}>{where}</span> · answered {formatAge(a.answeredAgeMin)} ago · stop-list{' '}
-        {a.stopItem}: {a.stopWords}
+        <span style={{ color: TONE_COLOR[tone] }}>{where}</span> · answered {formatAge(a.answeredAgeMin)} ago · {a.decisionWords.toLowerCase()}
       </p>
     </div>
   );
 }
 
 /**
- * The answer box. The stop-list item comes first and is required: §3 lets
- * only those seven kinds of decision into the queue, and the database refuses
- * an answer without one. "None of these" is not an option on purpose — the
- * copy says where such a decision belongs instead.
+ * The answer box. It carries DECISIONS, never AUTHORIZATIONS (CORTEX-INTENTS
+ * §3, Scott 2026-09-24). The kind comes first and is required; the
+ * authorization kinds are listed only as disabled options reading "needs you
+ * in the session" — shown so the line is visible, never answerable. The
+ * database refuses them too (ops_intent_answer, 016).
  */
 function AnswerForm({ runId, onAnswer }: { runId: string; onAnswer: OnAnswer }) {
   const [open, setOpen] = useState(false);
-  const [item, setItem] = useState('');
+  const [kind, setKind] = useState<Decision | ''>('');
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -181,7 +181,8 @@ function AnswerForm({ runId, onAnswer }: { runId: string; onAnswer: OnAnswer }) 
   const submit = async () => {
     setBusy(true);
     setError(null);
-    const r = await onAnswer(runId, Number(item), text);
+    if (kind === '') return;
+    const r = await onAnswer(runId, kind, text);
     setBusy(false);
     if (!r.ok) setError(r.reason);
   };
@@ -189,20 +190,27 @@ function AnswerForm({ runId, onAnswer }: { runId: string; onAnswer: OnAnswer }) 
   return (
     <div className="mt-1.5 space-y-1.5">
       <select
-        value={item}
+        value={kind}
         onChange={(e) => {
-          setItem(e.target.value);
+          setKind(e.target.value as Decision | '');
           setError(null);
         }}
-        aria-label="Stop-list item"
+        aria-label="Kind of decision"
         className="w-full rounded border border-border bg-surface2 px-2 py-1 font-mono text-xs text-text-primary focus:border-accent/40 focus:outline-none"
       >
-        <option value="">which stop-list item is this?</option>
-        {STOP_LIST.map((w, i) => (
-          <option key={w} value={i + 1}>
-            {i + 1}. {w}
+        <option value="">what kind of decision is this?</option>
+        {DECISIONS.map((d) => (
+          <option key={d.value} value={d.value}>
+            {d.words}
           </option>
         ))}
+        <optgroup label="Authorizations — needs you in the session">
+          {AUTHORIZATIONS.map((w) => (
+            <option key={w} disabled>
+              {w} — needs you in the session
+            </option>
+          ))}
+        </optgroup>
       </select>
       <textarea
         value={text}
@@ -220,7 +228,7 @@ function AnswerForm({ runId, onAnswer }: { runId: string; onAnswer: OnAnswer }) 
         <button
           type="button"
           onClick={submit}
-          disabled={busy || item === '' || !text.trim()}
+          disabled={busy || kind === '' || !text.trim()}
           className="rounded border border-accent/40 bg-accent/10 px-2.5 py-1 font-mono text-xs text-accent transition-colors hover:bg-accent/20 disabled:opacity-40"
         >
           {busy ? 'sending…' : 'send answer'}
@@ -237,7 +245,8 @@ function AnswerForm({ runId, onAnswer }: { runId: string; onAnswer: OnAnswer }) 
         </span>
       </div>
       <p className="font-mono text-[10px] italic text-text-muted/60">
-        None of the seven? Then it does not belong here — a sandbox rule, a hook or the brief&apos;s else-branch bounds it.
+        An authorization (merge, money, prod data, permissions, deletes) is never answered here — it needs you in the
+        session. A session that needs one it wasn&apos;t given parks.
       </p>
       {error && <p className="font-mono text-[10px] text-[#F59E0B]">{error}</p>}
     </div>

@@ -26,6 +26,7 @@ import type {
   CheckState,
   GitlabPayload,
   IntentRequestPayload,
+  Decision,
   IntentStatus,
   SessionCheckPayload,
   StoredAnswer,
@@ -33,7 +34,7 @@ import type {
   Wave,
   WavesPayload,
 } from './contract.ts';
-import { STOP_LIST } from './contract.ts';
+import { DECISIONS } from './contract.ts';
 
 export const BUDGET_MIN = { session_check: 45, gitlab: 30 } as const;
 
@@ -134,8 +135,8 @@ export interface WaitingItem {
 
 /** Scott's answer to one band-3 row, as far as Cortex knows it. */
 export interface IntentAnswerView {
-  stopItem: number;
-  stopWords: string;
+  decision: Decision;
+  decisionWords: string;
   text: string;
   answeredAgeMin: number;
   /**
@@ -459,8 +460,8 @@ export const NOT_ANSWERABLE_PERMISSION = 'permission prompt — answer it in the
 
 function viewAnswer(a: StoredAnswer, now: Date): IntentAnswerView {
   return {
-    stopItem: a.stop_item,
-    stopWords: STOP_LIST[a.stop_item - 1] ?? `stop-list item ${a.stop_item}`,
+    decision: a.decision,
+    decisionWords: DECISIONS.find((d) => d.value === a.decision)?.words ?? a.decision,
     text: a.answer,
     answeredAgeMin: ageMinutes(a.answered_at, now),
     status: a.status,
