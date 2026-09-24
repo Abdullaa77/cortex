@@ -56,3 +56,36 @@ export async function callRpc<T>(
   }
   return { ok: true, data: data as T };
 }
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const CONFLICTS = new Set(['invalid_transition', 'answered', 'too_early', 'not_parkable', 'not_parked']);
+
+/**
+ * The daemon's write-witness confirmations: POST { <key>: uuid } with the
+ * bearer token → one token-checked RPC taking (p_token, <param>). 200 on ok,
+ * 401 / 404 / 409 (a state the DB refuses to move from) / 422 / 503.
+ */
+export async function confirmRoute(request: Request, fn: string, key: 'id' | 'run_id', param: string): Promise<Response> {
+  const token = bearer(request);
+  if (!token) return json(401, { ok: false, error: 'unauthorized' });
+  let body: unknown;
+  try {
+    body = JSON.parse(await request.text());
+  } catch {
+    return json(400, { ok: false, error: 'not JSON' });
+  }
+  const v = (body as Record<string, unknown> | null)?.[key];
+  if (typeof v !== 'string' || !UUID.test(v)) return json(422, { ok: false, errors: [`$.${key}: must be a uuid`] });
+
+  const r = await callRpc<{ ok: boolean; duplicate?: boolean; error?: string; detail?: string }>(fn, {
+    p_token: token,
+    [param]: v,
+  });
+  if (!r.ok) return r.response;
+  const d = r.data;
+  if (d.ok) return json(200, { ok: true, [key]: v, duplicate: d.duplicate });
+  if (d.error === 'unauthorized') return json(401, { ok: false, error: 'unauthorized' });
+  if (d.error === 'not_found') return json(404, { ok: false, error: 'not_found' });
+  if (d.error && CONFLICTS.has(d.error)) return json(409, { ok: false, error: d.error, detail: d.detail });
+  return json(422, { ok: false, errors: [`database: ${d.error}`] });
+}

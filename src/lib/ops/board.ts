@@ -30,6 +30,7 @@ import type {
   IntentStatus,
   SessionCheckPayload,
   StoredAnswer,
+  StoredPark,
   WaitState,
   Wave,
   WavesPayload,
@@ -71,6 +72,8 @@ export interface BoardInput {
    * A run with no row here is WAITING — the state is derived, not stored.
    */
   answers: StoredAnswer[];
+  /** ops_intent_parks rows (017), joined by run_id. */
+  parks: StoredPark[];
 }
 
 export type Tone = 'red' | 'amber' | 'green' | 'grey';
@@ -187,6 +190,12 @@ export interface IntentItem {
   answerable: { ok: true } | { ok: false; reason: string };
   /** null = waiting — nobody has answered it on Cortex. */
   answer: IntentAnswerView | null;
+  /**
+   * 017: minutes since the session was told to park (60 min unanswered, and
+   * its transcript shows the message). null = not parked. An answer to a
+   * parked question goes to the wave note, not the session.
+   */
+  parkedAgeMin: number | null;
 }
 
 export interface IntentsBand {
@@ -469,8 +478,14 @@ function viewAnswer(a: StoredAnswer, now: Date): IntentAnswerView {
   };
 }
 
-export function intentsBand(runs: StoredRun<IntentRequestPayload>[], now: Date, answers: StoredAnswer[] = []): IntentsBand {
+export function intentsBand(
+  runs: StoredRun<IntentRequestPayload>[],
+  now: Date,
+  answers: StoredAnswer[] = [],
+  parks: StoredPark[] = []
+): IntentsBand {
   const byRun = new Map(answers.map((a) => [a.run_id, a]));
+  const parkedAt = new Map(parks.map((k) => [k.run_id, k.parked_at]));
   const inWindow = runs.filter((r) => now.getTime() - Date.parse(r.payload.asked_at) <= INTENTS_WINDOW_MS);
   inWindow.sort((a, b) => Date.parse(b.payload.asked_at) - Date.parse(a.payload.asked_at));
   const capped = inWindow.slice(0, INTENTS_CAP);
@@ -495,6 +510,7 @@ export function intentsBand(runs: StoredRun<IntentRequestPayload>[], now: Date, 
       ageMin: ageMinutes(p.asked_at, now),
       answerable: isPermission ? { ok: false as const, reason: NOT_ANSWERABLE_PERMISSION } : { ok: true as const },
       answer: stored ? viewAnswer(stored, now) : null,
+      parkedAgeMin: parkedAt.has(r.run_id) ? ageMinutes(parkedAt.get(r.run_id)!, now) : null,
     };
   });
   return {
@@ -657,6 +673,6 @@ export function boardState(input: BoardInput, now: Date): Board {
     ready,
     repos,
     controlStrip: ctl ? ctl.payload.checks.map(viewCheck) : null,
-    intents: intentsBand(input.intents, now, input.answers),
+    intents: intentsBand(input.intents, now, input.answers, input.parks),
   };
 }
