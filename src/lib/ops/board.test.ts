@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { boardState, CLAIMED_STALE_SECONDS, freshness, intentsBand, readyBand, rollup, waitingBand, type BoardInput } from './board.ts';
+import { ACTION_WITHHELD, boardState, freshness, intentsBand, readyBand, rollup, waitingBand, type BoardInput } from './board.ts';
 import { CONTROL_CHECKS, LIVE_CHECKS, NOW, GITLAB, WAVES, gitlabRun, intentRun, minutesAgo, sessionRun, wave, wavesRun } from './__fixtures__/runs.ts';
 
 const base = (over: Partial<BoardInput> = {}): BoardInput => ({
@@ -170,24 +170,48 @@ describe('waiting on you — 2026-09-24 additions (parked, scope, claimed, shipp
     assert.equal(noScope.scopeTruncated, false);
   });
 
-  test('claimed=true renders an age; claimed=false and absent both carry no age — only claimed:true is a badge', () => {
+  test('claimed=true renders an age; claimed=false and absent both carry no age, no lease status — only claimed:true is a badge', () => {
     const [claimed] = waitingBand([wave({ slug: 'a', gate: 'do-not-run', claimed: true, claimed_age_seconds: 300 })], NOW);
     assert.equal(claimed.claimed, true);
     assert.equal(claimed.claimedAgeSeconds, 300);
     const [notClaimed] = waitingBand([wave({ slug: 'b', gate: 'do-not-run', claimed: false })], NOW);
     assert.equal(notClaimed.claimed, false);
     assert.equal(notClaimed.claimedAgeSeconds, null);
+    assert.equal(notClaimed.leaseStatus, null);
     const [absent] = waitingBand([wave({ slug: 'c', gate: 'do-not-run' })], NOW);
     assert.equal(absent.claimed, null);
     assert.equal(absent.claimedAgeSeconds, null);
+    assert.equal(absent.leaseStatus, null);
   });
 
-  test('lease stale threshold is exactly 14400s — 14399 fresh, 14400 stale', () => {
-    assert.equal(CLAIMED_STALE_SECONDS, 14400);
-    const [fresh] = waitingBand([wave({ slug: 'a', gate: 'do-not-run', claimed: true, claimed_age_seconds: 14399 })], NOW);
-    assert.equal(fresh.claimedStale, false);
-    const [stale] = waitingBand([wave({ slug: 'b', gate: 'do-not-run', claimed: true, claimed_age_seconds: 14400 })], NOW);
-    assert.equal(stale.claimedStale, true);
+  // Replaces the old fixed 14399s/14400s age-threshold test (contract 2026-09-24,
+  // f2d746d): age alone is no longer the staleness test at all — a --ttl 12
+  // claim is live at 5h, which the old 4h-flat rule would have called stale.
+  describe('lease staleness — judged against lease_expires_at, never against age (f2d746d)', () => {
+    const secondsFromNow = (s: number) => new Date(NOW.getTime() + s * 1000).toISOString().replace(/\.\d{3}Z$/, 'Z');
+
+    test('a --ttl 12 claim (12h lease) still renders live at 5h old — the old 4h age rule would have called this stale', () => {
+      const [w] = waitingBand(
+        [wave({ slug: 'a', gate: 'do-not-run', claimed: true, claimed_age_seconds: 5 * 3600, lease_expires_at: secondsFromNow(7 * 3600) })],
+        NOW
+      );
+      assert.equal(w.leaseStatus, 'live');
+      assert.equal(w.claimedAgeSeconds, 5 * 3600);
+    });
+
+    test('render time exactly at, or past, lease_expires_at is stale; one second before is still live', () => {
+      const [before] = waitingBand([wave({ slug: 'a', gate: 'do-not-run', claimed: true, lease_expires_at: secondsFromNow(1) })], NOW);
+      assert.equal(before.leaseStatus, 'live');
+      const [atExpiry] = waitingBand([wave({ slug: 'b', gate: 'do-not-run', claimed: true, lease_expires_at: secondsFromNow(0) })], NOW);
+      assert.equal(atExpiry.leaseStatus, 'stale');
+      const [after] = waitingBand([wave({ slug: 'c', gate: 'do-not-run', claimed: true, lease_expires_at: secondsFromNow(-1) })], NOW);
+      assert.equal(after.leaseStatus, 'stale');
+    });
+
+    test('claimed=true with lease_expires_at absent is "unknown" — never "stale", never "live"', () => {
+      const [w] = waitingBand([wave({ slug: 'a', gate: 'do-not-run', claimed: true })], NOW);
+      assert.equal(w.leaseStatus, 'unknown');
+    });
   });
 
   test('shippable=true renders a checked age; false and absent both render nothing (null)', () => {
@@ -264,6 +288,20 @@ describe('blocked sessions — intents band 3', () => {
     const b = intentsBand([intentRun({ session_id: 's1', trigger: 'permission_request', tool_name: 'mcp__figma__get_node' }, 5)], NOW);
     assert.equal(b.items[0].toolName, 'mcp__figma__get_node');
     assert.equal(b.items[0].action, null);
+  });
+
+  test('a withheld action is flagged so the board never styles it as a command; an ordinary action is not flagged (f2d746d)', () => {
+    const withheld = intentsBand(
+      [intentRun({ session_id: 's1', trigger: 'permission_request', tool_name: 'Bash', action: ACTION_WITHHELD }, 5)],
+      NOW
+    );
+    assert.equal(withheld.items[0].action, ACTION_WITHHELD);
+    assert.equal(withheld.items[0].actionWithheld, true);
+    const ordinary = intentsBand(
+      [intentRun({ session_id: 's2', trigger: 'permission_request', tool_name: 'Bash', action: 'ls -la' }, 5)],
+      NOW
+    );
+    assert.equal(ordinary.items[0].actionWithheld, false);
   });
 
   test('an empty 24h window is a measured zero, not an absent signal', () => {

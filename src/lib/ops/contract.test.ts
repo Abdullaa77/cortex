@@ -142,6 +142,30 @@ describe('contract v1, 2026-09-24 additions — wave: status parked, scope, clai
     assert.deepEqual(errorsOf(envelopeOf('waves', { waves: [w] })), ['$.payload.waves[0].claimed_age_seconds: forbidden unless claimed=true']);
   });
 
+  test('lease_expires_at: same observable-half rule as claimed_age_seconds — forbidden unless claimed=true, optional when claimed=true (f2d746d)', () => {
+    assert.deepEqual(
+      errorsOf(envelopeOf('waves', { waves: [wave({ slug: 'a', claimed: true, lease_expires_at: '2026-09-25T02:00:00Z' })] })),
+      []
+    );
+    // claimed=true with no lease at all: optional, not required (a producer that
+    // could not read the claim's expiresAt is not a schema violation).
+    assert.deepEqual(errorsOf(envelopeOf('waves', { waves: [wave({ slug: 'a', claimed: true })] })), []);
+    assert.deepEqual(
+      errorsOf(envelopeOf('waves', { waves: [wave({ slug: 'a', claimed: false, lease_expires_at: '2026-09-25T02:00:00Z' })] })),
+      ['$.payload.waves[0].lease_expires_at: forbidden unless claimed=true']
+    );
+    const w = wave({ slug: 'a' }) as unknown as Record<string, unknown>;
+    w.lease_expires_at = '2026-09-25T02:00:00Z';
+    assert.deepEqual(errorsOf(envelopeOf('waves', { waves: [w] })), ['$.payload.waves[0].lease_expires_at: forbidden unless claimed=true']);
+  });
+
+  test('lease_expires_at without a Z suffix is refused, same as every other timestamp in the contract', () => {
+    assert.deepEqual(
+      errorsOf(envelopeOf('waves', { waves: [wave({ slug: 'a', claimed: true, lease_expires_at: '2026-09-25T02:00:00+05:00' })] })),
+      ['$.payload.waves[0].lease_expires_at: does not match /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$/']
+    );
+  });
+
   test('shippable_checked_at is required exactly when shippable is present, whatever its value', () => {
     assert.deepEqual(
       errorsOf(envelopeOf('waves', { waves: [wave({ slug: 'a', shippable: true, shippable_checked_at: '2026-09-24T10:00:00Z' })] })),
