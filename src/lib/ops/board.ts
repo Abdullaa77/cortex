@@ -25,12 +25,17 @@ import type {
   Check,
   CheckState,
   GitlabPayload,
+  IntentRequestPayload,
   SessionCheckPayload,
   Wave,
   WavesPayload,
 } from './contract.ts';
 
 export const BUDGET_MIN = { session_check: 45, gitlab: 30 } as const;
+
+/** Intents band 3 shows: newest first, over this window, capped at this many rows. */
+export const INTENTS_WINDOW_MS = 24 * 60 * 60 * 1000;
+export const INTENTS_CAP = 50;
 
 export interface StoredRun<P> {
   run_id: string;
@@ -50,6 +55,12 @@ export interface BoardInput {
   gitlab: StoredRun<GitlabPayload> | null;
   /** api.health's state from every live run in the last 7 days. */
   apiSamples: { at: string; state: CheckState }[];
+  /**
+   * Raw intent_request runs the caller fetched (a superset of the window is
+   * fine — this file does its own 24h filter, ordering and cap, so it is the
+   * one place that decision is testable without a database).
+   */
+  intents: StoredRun<IntentRequestPayload>[];
 }
 
 export type Tone = 'red' | 'amber' | 'green' | 'grey';
@@ -84,6 +95,53 @@ export interface WaitingItem {
   ageDays: number;
   noteAgeMin: number;
   inRegistry: boolean;
+  /** The note's human-readable one-liner. Slug stays visible regardless. */
+  scope: string | null;
+  scopeTruncated: boolean;
+  /** null = the claims directory could not be read (absent, not "unclaimed"). */
+  claimed: boolean | null;
+  /** Display only — NEVER the staleness test (contract 2026-09-24, f2d746d). null when claimed isn't true, or the age wasn't sent. */
+  claimedAgeSeconds: number | null;
+  /**
+   * null exactly when claimed !== true. Judged against render time vs
+   * lease_expires_at, never against age — a `--ttl 12` claim is live at 5h.
+   * 'unknown' (never "stale", never "live") when claimed=true but
+   * lease_expires_at was not sent.
+   */
+  leaseStatus: 'live' | 'stale' | 'unknown' | null;
+  /** null = not tracked (no MRs, or an MR's state is unknown/uncached). */
+  shippable: boolean | null;
+  shippableCheckedAgeMin: number | null;
+}
+
+export interface IntentItem {
+  sessionId: string;
+  trigger: 'permission_request' | 'notification';
+  /**
+   * permission_request only. The tool name is always present when trigger is
+   * permission_request (contract requires it); `action` is null exactly when
+   * the hook could not project one for that tool — render the "not
+   * projected" copy then, never a blank line.
+   */
+  toolName: string | null;
+  action: string | null;
+  /** True when `action` is exactly ACTION_WITHHELD — render as a plain muted notice, never monospace-as-a-command. */
+  actionWithheld: boolean;
+  /** permission_request only. The model's own words, shown BESIDE the action, never instead of it. */
+  description: string | null;
+  /** notification only. The type in words — a known mapping, or the raw value, or "not tracked". */
+  notificationWords: string | null;
+  /** Shown when present, on either trigger. */
+  question: string | null;
+  repo: string;
+  askedAt: string;
+  ageMin: number;
+}
+
+export interface IntentsBand {
+  items: IntentItem[];
+  /** How many more matched the 24h window beyond the `items` cap. 0 when none. */
+  moreCount: number;
 }
 
 export interface ReadyMr {
@@ -126,6 +184,12 @@ export interface Board {
   ready: Tracked<{ mrs: ReadyMr[]; commits: CommitRow[]; commitsUntracked: { repo: string; reason: string }[] }>;
   repos: Tracked<CheckView[]>;
   controlStrip: CheckView[] | null;
+  /**
+   * "Blocked sessions" — band 3, adjacent to Waiting on you. A count of real
+   * events in a time window, so an empty list here is a measured zero (no
+   * session blocked in 24h), not an absent signal.
+   */
+  intents: IntentsBand;
 }
 
 // ---------------------------------------------------------------- small pieces
@@ -259,20 +323,94 @@ function daysBetween(day: string, now: Date): number {
 export function waitingBand(waves: Wave[], now: Date): WaitingItem[] {
   return waves
     .filter(isWaiting)
-    .map((w) => ({
-      slug: w.slug,
-      title: w.title,
-      repos: w.repos,
-      status: w.status,
-      gate: w.gate,
-      waiting: w.waiting_on_scott ?? null,
-      truncated: w.waiting_on_scott_truncated === true,
-      started: w.started,
-      ageDays: daysBetween(w.started, now),
-      noteAgeMin: ageMinutes(w.note_mtime, now),
-      inRegistry: w.in_registry,
-    }))
+    .map((w) => {
+      const claimed = w.claimed ?? null;
+      // claimed_age_seconds / lease_expires_at are only ever meaningful when
+      // claimed=true — the validator forbids them otherwise, but this stays
+      // defensive either way.
+      const claimedAgeSeconds = claimed === true ? (w.claimed_age_seconds ?? null) : null;
+      const leaseStatus: WaitingItem['leaseStatus'] =
+        claimed !== true
+          ? null
+          : w.lease_expires_at === undefined
+            ? 'unknown'
+            : now.getTime() >= Date.parse(w.lease_expires_at)
+              ? 'stale'
+              : 'live';
+      const shippable = w.shippable ?? null;
+      return {
+        slug: w.slug,
+        title: w.title,
+        repos: w.repos,
+        status: w.status,
+        gate: w.gate,
+        waiting: w.waiting_on_scott ?? null,
+        truncated: w.waiting_on_scott_truncated === true,
+        started: w.started,
+        ageDays: daysBetween(w.started, now),
+        noteAgeMin: ageMinutes(w.note_mtime, now),
+        inRegistry: w.in_registry,
+        scope: w.scope ?? null,
+        scopeTruncated: w.scope_truncated === true,
+        claimed,
+        claimedAgeSeconds,
+        leaseStatus,
+        shippable,
+        shippableCheckedAgeMin: shippable === true && w.shippable_checked_at ? ageMinutes(w.shippable_checked_at, now) : null,
+      };
+    })
     .sort((a, b) => a.started.localeCompare(b.started) || a.slug.localeCompare(b.slug));
+}
+
+/**
+ * Band 3's "Blocked sessions" list. Newest first (by when the hook fired,
+ * `asked_at` — the domain event, not the envelope's own finished_at), over a
+ * rolling 24h window, capped at INTENTS_CAP with the overflow counted, not
+ * dropped silently.
+ */
+/**
+ * Known Notification matcher values (CORTEX-INTENTS §9.1 delta, aeb9adf) in
+ * words. An unknown type must not 422 (contract: "a new Claude Code type
+ * must not 422"), so one outside this map renders as its raw value rather
+ * than disappearing.
+ */
+const NOTIFICATION_WORDS: Record<string, string> = {
+  idle_prompt: 'idle — waiting for input',
+  agent_needs_input: 'needs input',
+  elicitation_dialog: 'elicitation',
+};
+
+/**
+ * Contract 2026-09-24 (f2d746d, Scott): credential-shaped Bash commands and
+ * descriptions are withheld WHOLE, never masked — no part of the command is
+ * sent. These are the exact producer-side sentinel strings; the board's only
+ * job is to not style one as a command.
+ */
+export const ACTION_WITHHELD = '<command withheld — may contain a credential>';
+export const DESCRIPTION_WITHHELD = '<description withheld — may contain a credential>';
+
+export function intentsBand(runs: StoredRun<IntentRequestPayload>[], now: Date): IntentsBand {
+  const inWindow = runs.filter((r) => now.getTime() - Date.parse(r.payload.asked_at) <= INTENTS_WINDOW_MS);
+  inWindow.sort((a, b) => Date.parse(b.payload.asked_at) - Date.parse(a.payload.asked_at));
+  const items = inWindow.slice(0, INTENTS_CAP).map((r) => {
+    const p = r.payload;
+    const isPermission = p.trigger === 'permission_request';
+    const action = isPermission ? (p.action ?? null) : null;
+    return {
+      sessionId: p.session_id,
+      trigger: p.trigger,
+      toolName: isPermission ? (p.tool_name ?? null) : null,
+      action,
+      actionWithheld: action === ACTION_WITHHELD,
+      description: isPermission ? (p.description ?? null) : null,
+      notificationWords: isPermission ? null : (p.notification_type && (NOTIFICATION_WORDS[p.notification_type] ?? p.notification_type)) || 'not tracked',
+      question: p.question ?? null,
+      repo: p.repo ?? 'repo not tracked',
+      askedAt: p.asked_at,
+      ageMin: ageMinutes(p.asked_at, now),
+    };
+  });
+  return { items, moreCount: Math.max(0, inWindow.length - items.length) };
 }
 
 /** repo!iid → wave slug, and repo@sha-prefix → wave slug. The join lives here, not in the producer. */
@@ -428,5 +566,6 @@ export function boardState(input: BoardInput, now: Date): Board {
     ready,
     repos,
     controlStrip: ctl ? ctl.payload.checks.map(viewCheck) : null,
+    intents: intentsBand(input.intents, now),
   };
 }

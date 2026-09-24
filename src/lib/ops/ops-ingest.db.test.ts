@@ -4,22 +4,29 @@ import { readFileSync } from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 
 /**
- * Migration 013's write door, executed — not read off the page.
+ * The write door, executed — not read off the page. 013's tests, plus 014
+ * (widened kind + forbidden_key) run on top of it in the same database, in
+ * order, the way the Supabase SQL editor applies them.
  *
  * Same exception to the suite's no-database convention that 012's test took,
  * for the same reason: "the database refuses this" is a claim about what
- * Postgres DOES. The file under test is the actual text of 013, run as-is in
- * PGlite (Postgres in WASM, in-process, no network, nothing touching the live
- * project). The auth schema and the two Supabase API roles are stubbed with
- * exactly what 013 references.
+ * Postgres DOES. The files under test are the actual text of 013 and 014,
+ * run as-is in PGlite (Postgres in WASM, in-process, no network, nothing
+ * touching the live project). The auth schema and the two Supabase API
+ * roles are stubbed with exactly what 013 references.
  *
- * What this cannot prove: that 013 is applied, or that the live token row
- * exists. `npm run check:migrations` sees `ops_runs`; the first real push
- * returning 202 is the rest.
+ * What this cannot prove: that 014 is applied to the live database, or that
+ * the live token row exists. `npm run check:migrations` sees `ops_runs` (and
+ * reports 014 unprobeable — see its sentinel); the first real push returning
+ * 202 for an intent_request run is the rest.
  */
 
 const MIGRATION = readFileSync(
   new URL('../../../supabase/migrations/013_ops_ingest.sql', import.meta.url),
+  'utf8'
+);
+const MIGRATION_014 = readFileSync(
+  new URL('../../../supabase/migrations/014_ops_intents_kind.sql', import.meta.url),
   'utf8'
 );
 
@@ -60,6 +67,7 @@ const ready = (async () => {
   const db = await PGlite.create();
   await db.exec(STUB);
   await db.exec(MIGRATION);
+  await db.exec(MIGRATION_014);
   await db.query(
     `INSERT INTO ops_private.ingest_tokens (token_hash, user_id, label, revoked_at) VALUES
        (sha256(convert_to($1, 'UTF8')), $3, 'dev box', NULL),
@@ -192,5 +200,58 @@ describe('013: the one write door', () => {
     } finally {
       await db.exec('RESET ROLE');
     }
+  });
+});
+
+describe('014: intents kind + widened forbidden key', () => {
+  test('an intent_request run is stored, carrying no mode', async () => {
+    const env = envelope(
+      { kind: 'intent_request', producer: { name: 'intent-hook', host: 'test', version: 'abc1234' } },
+      { mode: undefined, session_id: 'sess-abc123', asked_at: '2026-09-24T10:00:00Z', notification_type: 'agent_needs_input' }
+    );
+    const r = await ingest(TOKEN, env);
+    assert.deepEqual(r, { ok: true, run_id: env.run_id, duplicate: false });
+    assert.equal(await count(`run_id = '${env.run_id}' AND kind = 'intent_request' AND mode IS NULL`), 1);
+  });
+
+  test('a waves run carrying the new wave keys (scope, claimed, shippable, status=parked) is stored', async () => {
+    const env = envelope(
+      { kind: 'waves', producer: { name: 'wave', host: 't', version: 'x' } },
+      {
+        mode: undefined,
+        waves: [
+          {
+            slug: 'a',
+            note_mtime: '2026-09-24T10:00:00Z',
+            status: 'parked',
+            scope: 'human-readable one-liner',
+            scope_truncated: true,
+            claimed: true,
+            claimed_age_seconds: 14401,
+            shippable: true,
+            shippable_checked_at: '2026-09-24T09:00:00Z',
+          },
+        ],
+      }
+    );
+    const r = await ingest(TOKEN, env);
+    assert.equal(r.ok, true);
+    assert.equal(await count(`run_id = '${env.run_id}'`), 1);
+  });
+
+  test('cwd, transcript_path and tool_input are refused at any depth, by name', async () => {
+    for (const k of ['cwd', 'transcript_path', 'tool_input']) {
+      const env = envelope({}, { checks: [{ [k]: 'x' }] });
+      const r = await ingest(TOKEN, env);
+      assert.equal(r.error, 'forbidden_key', k);
+      assert.equal(r.detail, k);
+    }
+  });
+
+  test('a pre-014 kind (session_check) still stores — no regression', async () => {
+    const env = envelope();
+    const r = await ingest(TOKEN, env);
+    assert.deepEqual(r, { ok: true, run_id: env.run_id, duplicate: false });
+    assert.equal(await count(`run_id = '${env.run_id}' AND kind = 'session_check'`), 1);
   });
 });
