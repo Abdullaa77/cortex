@@ -16,11 +16,15 @@
 --
 --  1. `ops_runs.kind` and `ops_ingest()`'s own kind check both accept the new
 --     kind `intent_request` (contract §5b, producer `intent-hook`).
---  2. `ops_private.forbidden_key` gains `cwd` and `transcript_path`.
---     CORTEX-INTENTS.md §5 lists `cwd` on the `ops_intents` shape, but this
---     contract keeps local-machine detail off this box (a cwd is usually a
---     worktree path) — the hook writes it to a local sidecar instead and
---     must never be able to send it here, even nested under another key.
+--  2. `ops_private.forbidden_key` gains `cwd`, `transcript_path` and (2026-09-24,
+--     aeb9adf) `tool_input`. CORTEX-INTENTS.md §5 lists `cwd` on the `ops_intents`
+--     shape, but this contract keeps local-machine detail off this box (a cwd is
+--     usually a worktree path) — the hook writes it to a local sidecar instead.
+--     `tool_input` carries file contents for Write/Edit and anything at all for
+--     MCP tools; only the `action` projection the hook computes from it (contract
+--     §5b) ever leaves the box. Neither may reach this security domain, even
+--     nested under another key. This file is edited in place, not superseded by
+--     a 015, because 014 is not applied anywhere yet.
 --
 -- Idempotent: safe to paste into the SQL editor more than once. The
 -- constraint is dropped and re-added by its default-generated name; the
@@ -38,7 +42,7 @@ LANGUAGE sql IMMUTABLE
 SET search_path = ''
 AS $$
   SELECT k
-    FROM unnest(ARRAY['body', 'note', 'content', 'markdown', 'worktree', 'chat', 'source_line', 'cwd', 'transcript_path']) AS k
+    FROM unnest(ARRAY['body', 'note', 'content', 'markdown', 'worktree', 'chat', 'source_line', 'cwd', 'transcript_path', 'tool_input']) AS k
    WHERE jsonb_path_exists(p_payload, ('lax $.**.' || k)::jsonpath)
    LIMIT 1
 $$;
