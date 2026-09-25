@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { ACTION_WITHHELD, NOT_ANSWERABLE_PERMISSION, boardState, deriveWaitState, freshness, intentsBand, readyBand, rollup, waitingBand, type BoardInput } from './board.ts';
+import { ACTION_WITHHELD, QUESTION_WITHHELD, STOP_WORDS, NOT_ANSWERABLE_PERMISSION, boardState, deriveWaitState, freshness, intentsBand, readyBand, rollup, waitingBand, type BoardInput } from './board.ts';
 import { CONTROL_CHECKS, LIVE_CHECKS, NOW, GITLAB, WAVES, gitlabRun, intentRun, minutesAgo, sessionRun, wave, wavesRun } from './__fixtures__/runs.ts';
 
 const base = (over: Partial<BoardInput> = {}): BoardInput => ({
@@ -13,6 +13,7 @@ const base = (over: Partial<BoardInput> = {}): BoardInput => ({
   intents: [],
   answers: [],
   parks: [],
+  resolutions: [],
   ...over,
 });
 
@@ -472,5 +473,76 @@ describe('parks — the 60-minute path (017)', () => {
     const run = intentRun({ session_id: 's', trigger: 'notification' }, 70);
     const b = boardState(base({ intents: [run], parks: [{ run_id: run.run_id, parked_at: minutesAgo(3) }] }), NOW);
     assert.equal(b.intents.blocked[0].parkedAgeMin, 3);
+  });
+});
+
+describe('resolutions — band 3 shows only what is true now (018)', () => {
+  const answer = (run_id: string, status: 'pending' | 'applied') => ({
+    id: '50000000-0000-4000-8000-000000000001',
+    run_id,
+    decision: 'choose' as const,
+    answer: 'A',
+    answered_at: minutesAgo(2),
+    status,
+    applied_at: status === 'applied' ? minutesAgo(1) : null,
+  });
+
+  test('a resolved row leaves the board; an open one stays', () => {
+    const gone = intentRun({ session_id: 'a', trigger: 'permission_request', tool_name: 'Bash', action: 'ls' }, 5);
+    const open = intentRun({ session_id: 'b', trigger: 'permission_request', tool_name: 'Bash', action: 'ls' }, 5);
+    const b = intentsBand([gone, open], NOW, [], [], [{ run_id: gone.run_id, reason: 'moved_on', resolved_at: minutesAgo(1) }]);
+    assert.deepEqual(b.blocked.map((i) => i.runId), [open.run_id]);
+  });
+
+  test('every reason resolves — including manual', () => {
+    const runs = (['moved_on', 'superseded', 'session_exited', 'manual'] as const).map((reason, i) => ({
+      run: intentRun({ session_id: `s${i}`, trigger: 'notification' }, 5),
+      reason,
+    }));
+    const b = intentsBand(runs.map((r) => r.run), NOW, [], [], runs.map((r) => ({ run_id: r.run.run_id, reason: r.reason, resolved_at: minutesAgo(1) })));
+    assert.equal(b.blocked.length + b.idle.length, 0);
+  });
+
+  test('resolved rows are not counted in "N more"', () => {
+    const runs = Array.from({ length: 60 }, (_, i) => intentRun({ session_id: `s${i}`, trigger: 'notification' }, 5));
+    const b = intentsBand(runs, NOW, [], [], runs.slice(0, 20).map((r) => ({ run_id: r.run_id, reason: 'session_exited' as const, resolved_at: minutesAgo(1) })));
+    assert.equal(b.blocked.length, 40);
+    assert.equal(b.moreCount, 0);
+  });
+
+  test('an answer still pending delivery keeps a resolved row visible; a delivered one does not', () => {
+    const pending = intentRun({ session_id: 'p', trigger: 'notification' }, 5);
+    const applied = intentRun({ session_id: 'q', trigger: 'notification' }, 5);
+    const z = (run_id: string) => ({ run_id, reason: 'session_exited' as const, resolved_at: minutesAgo(1) });
+    const b = intentsBand([pending, applied], NOW, [answer(pending.run_id, 'pending'), answer(applied.run_id, 'applied')], [], [z(pending.run_id), z(applied.run_id)]);
+    assert.deepEqual(b.blocked.map((i) => i.runId), [pending.run_id]);
+  });
+
+  test('boardState passes input.resolutions through', () => {
+    const run = intentRun({ session_id: 's', trigger: 'notification' }, 5);
+    const b = boardState(base({ intents: [run], resolutions: [{ run_id: run.run_id, reason: 'moved_on', resolved_at: minutesAgo(1) }] }), NOW);
+    assert.equal(b.intents.blocked.length, 0);
+  });
+});
+
+describe('stop rows — "waiting for you" (2026-09-25)', () => {
+  test('a stop row is idle, worded, answerable, and shows its last line', () => {
+    const run = intentRun({ session_id: 's', trigger: 'stop', wait_state: 'idle', question: 'Merge it now, or wait for CI?' }, 3);
+    const b = intentsBand([run], NOW);
+    assert.equal(b.blocked.length, 0);
+    const it = b.idle[0];
+    assert.equal(it.notificationWords, STOP_WORDS);
+    assert.equal(it.question, 'Merge it now, or wait for CI?');
+    assert.equal(it.questionWithheld, false);
+    assert.deepEqual(it.answerable, { ok: true });
+  });
+
+  test('a stop row with no wait_state still derives idle', () => {
+    assert.equal(deriveWaitState({ session_id: 's', trigger: 'stop', asked_at: minutesAgo(1) }), 'idle');
+  });
+
+  test('a withheld last line is flagged', () => {
+    const run = intentRun({ session_id: 's', trigger: 'stop', wait_state: 'idle', question: QUESTION_WITHHELD }, 3);
+    assert.equal(intentsBand([run], NOW).idle[0].questionWithheld, true);
   });
 });

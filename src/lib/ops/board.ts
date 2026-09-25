@@ -31,6 +31,7 @@ import type {
   SessionCheckPayload,
   StoredAnswer,
   StoredPark,
+  StoredResolution,
   WaitState,
   Wave,
   WavesPayload,
@@ -74,6 +75,12 @@ export interface BoardInput {
   answers: StoredAnswer[];
   /** ops_intent_parks rows (017), joined by run_id. */
   parks: StoredPark[];
+  /**
+   * ops_intent_resolutions rows (018), joined by run_id. A resolved row is no
+   * longer true and leaves the board — unless Scott's answer to it is still
+   * pending delivery (that must stay visible, never silently lost).
+   */
+  resolutions: StoredResolution[];
 }
 
 export type Tone = 'red' | 'amber' | 'green' | 'grey';
@@ -154,12 +161,12 @@ export interface IntentItem {
   /** The intent_request run — what an answer is attached to. */
   runId: string;
   sessionId: string;
-  trigger: 'permission_request' | 'notification';
+  trigger: 'permission_request' | 'notification' | 'stop';
   /**
    * Decided by the hook at emit time (contract §5b, 2026-09-24). A row stored
    * before that amendment carries no wait_state; deriveWaitState below fills
    * it in from trigger/notification_type. This is what splits band 3 into
-   * "Blocked — needs your answer" and "Idle — close or feed" — an idle row
+   * "Blocked — needs your answer" and "Idle — waiting for you" — an idle row
    * must never land in the blocked group.
    */
   waitState: WaitState;
@@ -175,10 +182,12 @@ export interface IntentItem {
   actionWithheld: boolean;
   /** permission_request only. The model's own words, shown BESIDE the action, never instead of it. */
   description: string | null;
-  /** notification only. The type in words — a known mapping, or the raw value, or "not tracked". */
+  /** notification / stop. The type in words — a known mapping, or the raw value, or "not tracked". */
   notificationWords: string | null;
-  /** Shown when present, on either trigger. */
+  /** Shown when present, on any trigger. On a stop row: the last line of the session's final message. */
   question: string | null;
+  /** True when `question` is exactly QUESTION_WITHHELD — render as a muted notice. */
+  questionWithheld: boolean;
   repo: string;
   askedAt: string;
   ageMin: number;
@@ -201,9 +210,9 @@ export interface IntentItem {
 export interface IntentsBand {
   /** BLOCKED = permission_request, or notification with agent_needs_input|elicitation_dialog. */
   blocked: IntentItem[];
-  /** IDLE = notification idle_prompt only. Never mixed into `blocked`. */
+  /** IDLE = stop (turn ended, waiting for you), or legacy idle_prompt. Never mixed into `blocked`. */
   idle: IntentItem[];
-  /** How many more matched the 24h window beyond the combined cap. 0 when none. */
+  /** How many more open rows matched the 24h window beyond the combined cap. 0 when none. */
   moreCount: number;
 }
 
@@ -452,6 +461,9 @@ const NOTIFICATION_WORDS: Record<string, string> = {
  */
 export const ACTION_WITHHELD = '<command withheld — may contain a credential>';
 export const DESCRIPTION_WITHHELD = '<description withheld — may contain a credential>';
+export const QUESTION_WITHHELD = '<last line withheld — may contain a credential>';
+/** A Stop row's type in words (it carries no notification_type). */
+export const STOP_WORDS = 'turn ended — waiting for you';
 
 /**
  * Rows stored before the 2026-09-24 wait_state amendment carry no wait_state
@@ -462,6 +474,7 @@ export const DESCRIPTION_WITHHELD = '<description withheld — may contain a cre
  */
 export function deriveWaitState(p: IntentRequestPayload): WaitState {
   if (p.wait_state) return p.wait_state;
+  if (p.trigger === 'stop') return 'idle';
   return p.trigger === 'notification' && p.notification_type === 'idle_prompt' ? 'idle' : 'blocked';
 }
 
@@ -482,11 +495,16 @@ export function intentsBand(
   runs: StoredRun<IntentRequestPayload>[],
   now: Date,
   answers: StoredAnswer[] = [],
-  parks: StoredPark[] = []
+  parks: StoredPark[] = [],
+  resolutions: StoredResolution[] = []
 ): IntentsBand {
   const byRun = new Map(answers.map((a) => [a.run_id, a]));
   const parkedAt = new Map(parks.map((k) => [k.run_id, k.parked_at]));
-  const inWindow = runs.filter((r) => now.getTime() - Date.parse(r.payload.asked_at) <= INTENTS_WINDOW_MS);
+  const resolved = new Set(resolutions.map((z) => z.run_id));
+  // Resolved = the session moved on; the row is no longer true. The one
+  // exception: an answer still pending delivery stays visible until it lands.
+  const open = (r: StoredRun<IntentRequestPayload>) => !resolved.has(r.run_id) || byRun.get(r.run_id)?.status === 'pending';
+  const inWindow = runs.filter((r) => open(r) && now.getTime() - Date.parse(r.payload.asked_at) <= INTENTS_WINDOW_MS);
   inWindow.sort((a, b) => Date.parse(b.payload.asked_at) - Date.parse(a.payload.asked_at));
   const capped = inWindow.slice(0, INTENTS_CAP);
   const items = capped.map((r) => {
@@ -503,8 +521,13 @@ export function intentsBand(
       action,
       actionWithheld: action === ACTION_WITHHELD,
       description: isPermission ? (p.description ?? null) : null,
-      notificationWords: isPermission ? null : (p.notification_type && (NOTIFICATION_WORDS[p.notification_type] ?? p.notification_type)) || 'not tracked',
+      notificationWords: isPermission
+        ? null
+        : p.trigger === 'stop'
+          ? STOP_WORDS
+          : (p.notification_type && (NOTIFICATION_WORDS[p.notification_type] ?? p.notification_type)) || 'not tracked',
       question: p.question ?? null,
+      questionWithheld: p.question === QUESTION_WITHHELD,
       repo: p.repo ?? 'repo not tracked',
       askedAt: p.asked_at,
       ageMin: ageMinutes(p.asked_at, now),
@@ -673,6 +696,6 @@ export function boardState(input: BoardInput, now: Date): Board {
     ready,
     repos,
     controlStrip: ctl ? ctl.payload.checks.map(viewCheck) : null,
-    intents: intentsBand(input.intents, now, input.answers, input.parks),
+    intents: intentsBand(input.intents, now, input.answers, input.parks, input.resolutions),
   };
 }

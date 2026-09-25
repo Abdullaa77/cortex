@@ -12,11 +12,14 @@ import {
   type SessionCheckPayload,
   type StoredAnswer,
   type StoredPark,
+  type StoredResolution,
   type WavesPayload,
 } from '@/lib/ops/contract';
 
 const RUN_SELECT = 'run_id, finished_at, received_at, payload';
-const POLL_MS = 60_000;
+// 30 s: a resolved row (018) should leave the board within a minute of the
+// session moving on — the daemon checks every 15 s, the board reads every 30 s.
+const POLL_MS = 30_000;
 
 /**
  * Why a query failed, in words that say what to do. Every one of these is a
@@ -24,6 +27,8 @@ const POLL_MS = 60_000;
  */
 export function classifyFailure(err: { message?: string; code?: string } | null): string {
   const msg = err?.message ?? 'unknown error';
+  if ((err?.code === 'PGRST205' || err?.code === '42P01') && /ops_intent_resolutions/.test(msg))
+    return 'ops_intent_resolutions missing — migration 018 not applied';
   if ((err?.code === 'PGRST205' || err?.code === '42P01') && /ops_intent_parks/.test(msg))
     return 'ops_intent_parks missing — migration 017 not applied';
   if ((err?.code === 'PGRST205' || err?.code === '42P01') && /ops_intents/.test(msg))
@@ -83,7 +88,7 @@ export function useOps(): {
       return q.order('finished_at', { ascending: false }).limit(1).maybeSingle();
     };
     try {
-      const [live, control, waves, gitlab, samples, intents, answers, parks] = await Promise.all([
+      const [live, control, waves, gitlab, samples, intents, answers, parks, resolutions] = await Promise.all([
         latest('session_check', 'live'),
         latest('session_check', 'control'),
         latest('waves'),
@@ -111,8 +116,14 @@ export function useOps(): {
         // Parks can only happen 60 min after asking, so anything in the window
         // parked after the window opened.
         supabase.from('ops_intent_parks').select('run_id, parked_at').gte('parked_at', sinceIntents).limit(INTENTS_FETCH_LIMIT),
+        // A row can only be resolved after it was raised, so the same bound holds.
+        supabase
+          .from('ops_intent_resolutions')
+          .select('run_id, reason, resolved_at')
+          .gte('resolved_at', sinceIntents)
+          .limit(INTENTS_FETCH_LIMIT),
       ]);
-      const failed = [live, control, waves, gitlab, samples, intents, answers, parks].find((r) => r.error);
+      const failed = [live, control, waves, gitlab, samples, intents, answers, parks, resolutions].find((r) => r.error);
       if (failed) throw failed.error;
 
       const apiSamples = ((samples.data ?? []) as { finished_at: string; checks: Check[] | null }[]).flatMap((r) => {
@@ -130,6 +141,7 @@ export function useOps(): {
         intents: (intents.data ?? []) as StoredRun<IntentRequestPayload>[],
         answers: (answers.data ?? []) as StoredAnswer[],
         parks: (parks.data ?? []) as StoredPark[],
+        resolutions: (resolutions.data ?? []) as StoredResolution[],
       });
     } catch (err) {
       const reach: Reach = {
@@ -139,7 +151,7 @@ export function useOps(): {
       };
       // Nothing from before the failure is kept: a board that could not ask
       // shows that it could not ask, not the last thing it heard.
-      setInput({ reach, live: null, control: null, waves: null, gitlab: null, apiSamples: [], intents: [], answers: [], parks: [] });
+      setInput({ reach, live: null, control: null, waves: null, gitlab: null, apiSamples: [], intents: [], answers: [], parks: [], resolutions: [] });
     } finally {
       setLoading(false);
       setNow(new Date());
