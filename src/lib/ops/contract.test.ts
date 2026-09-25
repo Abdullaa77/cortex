@@ -340,3 +340,31 @@ describe('contract v1, 2026-09-24 additions — kind: intent_request', () => {
     assert.equal((valid().producer as Record<string, unknown>).name, 'intent-hook');
   });
 });
+
+describe('contract v1, 2026-09-25 addition — trigger: stop', () => {
+  const stop = (over: Record<string, unknown> = {}) =>
+    envelopeOf('intent_request', {
+      session_id: 'sess-stop1',
+      trigger: 'stop',
+      wait_state: 'idle',
+      question: 'Merge it now, or wait for CI?',
+      asked_at: '2026-09-24T10:00:00Z',
+      repo: 'cortex',
+      ...over,
+    });
+
+  test('a stop row with its last line is accepted', () => {
+    assert.deepEqual(errorsOf(stop()), []);
+  });
+
+  test('a stop row is never blocked', () => {
+    assert.deepEqual(errorsOf(stop({ wait_state: 'blocked' })), ['$.payload.wait_state: must be idle when trigger=stop']);
+  });
+
+  test('permission-only and notification-only fields are refused on a stop row', () => {
+    assert.deepEqual(errorsOf(stop({ tool_name: 'Bash', notification_type: 'idle_prompt' })), [
+      '$.payload.tool_name: forbidden unless trigger=permission_request',
+      '$.payload.notification_type: forbidden unless trigger=notification',
+    ]);
+  });
+});

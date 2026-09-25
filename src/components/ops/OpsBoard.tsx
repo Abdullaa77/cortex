@@ -281,7 +281,9 @@ function IntentRow({ it, onAnswer }: { it: IntentItem; onAnswer: OnAnswer }) {
       ) : (
         <>
           <p className="font-mono text-xs text-text-primary">{it.notificationWords}</p>
-          {it.question && <p className="font-mono text-[11px] text-text-muted">{it.question}</p>}
+          {it.question && (
+            <p className={`font-mono text-[11px] text-text-muted${it.questionWithheld ? ' italic' : ''}`}>{it.question}</p>
+          )}
         </>
       )}
       <p className="font-mono text-[10px] text-text-muted/60">
@@ -305,7 +307,7 @@ function IntentRow({ it, onAnswer }: { it: IntentItem; onAnswer: OnAnswer }) {
 
 /**
  * A sub-heading inside the "Blocked sessions" panel, splitting band 3 into
- * "Blocked — needs your answer" and "Idle — close or feed" (contract §5b,
+ * "Blocked — needs your answer" and "Idle — waiting for you" (contract §5b,
  * 2026-09-24 wait_state amendment). An idle row must never render under the
  * Blocked heading — board.ts's intentsBand() already partitions items by
  * waitState, so this component only ever sees the group it was given.
@@ -492,16 +494,16 @@ export default function OpsBoard({
             />
             <Panel>
               {total === 0 ? (
-                <p className="px-3 py-2 font-mono text-[11px] text-text-muted">no session blocked on you in the last 24h</p>
+                <p className="px-3 py-2 font-mono text-[11px] text-text-muted">no session waiting on you right now</p>
               ) : (
                 <>
                   <IntentGroup title="Blocked — needs your answer" items={blocked} emptyCopy="none blocked" onAnswer={onAnswer} />
-                  <IntentGroup title="Idle — close or feed" items={idle} emptyCopy="none idle" onAnswer={onAnswer} />
+                  <IntentGroup title="Idle — waiting for you" items={idle} emptyCopy="none idle" onAnswer={onAnswer} />
                 </>
               )}
               {moreCount > 0 && <p className="px-3 py-1.5 font-mono text-[10px] text-text-muted/60">{moreCount} more</p>}
               <p className="px-3 py-1.5 font-mono text-[10px] italic text-text-muted/50">
-                Cortex knows only answers given here — an unanswered row may already have been answered at the terminal
+                a row clears within a minute of its session moving on — answered at the terminal, the next tool runs, or it exits
               </p>
             </Panel>
           </>

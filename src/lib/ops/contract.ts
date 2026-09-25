@@ -31,8 +31,9 @@ export type CheckMethod = 'exact' | 'timing_proxy' | 'query' | 'heartbeat' | 'pr
  * §5b, 2026-09-24 amendment. Decided by the hook at emit time, never
  * recomputed here: BLOCKED = trigger permission_request, or notification
  * with notification_type agent_needs_input|elicitation_dialog (something
- * waits on an answer). IDLE = notification idle_prompt only (turn finished,
- * nothing waiting). Required on every new intent_request — rows stored
+ * waits on an answer). IDLE = trigger stop (2026-09-25: the turn ended and
+ * the session waits for Scott — replaces idle_prompt, which barely fires), or
+ * a legacy notification idle_prompt. Required on every new intent_request — rows stored
  * before this amendment have no wait_state; the board derives it from the
  * stored trigger/notification_type for those (see board.ts).
  */
@@ -169,16 +170,21 @@ export interface GitlabPayload {
 }
 
 /**
- * §5b. One per blocked session, from two hooks: `PermissionRequest` (the
- * permission-prompt source — carries tool_name/tool_input) and `Notification`
- * (every other way a session waits — matcher excludes `permission_prompt`,
- * which PermissionRequest already covers). Producer: intent-hook.
+ * §5b. One per waiting session, from three hooks: `PermissionRequest` (the
+ * permission-prompt source — carries tool_name/tool_input), `Notification`
+ * (agent_needs_input|elicitation_dialog — matcher excludes `permission_prompt`,
+ * which PermissionRequest already covers) and, 2026-09-25, `Stop` (the turn
+ * ended: "waiting for you", with the last line of the session's final
+ * message as `question`). Producer: intent-hook.
+ *
+ * A row is open until the dev-box daemon records its resolution (018) — the
+ * session moved on, raised a newer row, or exited.
  */
 export interface IntentRequestPayload {
   /** Hook payload session_id, verbatim; [A-Za-z0-9_-], ≤ 128. The reply-to address for the daemon. */
   session_id: string;
   /** Which hook fired. REQUIRED. Gates which of the fields below are valid. */
-  trigger: 'permission_request' | 'notification';
+  trigger: 'permission_request' | 'notification' | 'stop';
   /**
    * §5b, 2026-09-24 amendment. REQUIRED on every new intent_request — the
    * validator enforces that at ingest (see intentRequest() below). Optional
@@ -204,8 +210,10 @@ export interface IntentRequestPayload {
   /** notification only. Hook payload notification_type, verbatim; [a-z_], ≤ 40. Free string
    *  on purpose — a new Claude Code type must not 422. Omit + `untracked` when absent. */
   notification_type?: string;
-  /** Hook payload `message`, VERBATIM, cut at 240 chars. NO content filter. Omit + `untracked`
-   *  when the payload carries no message. */
+  /** notification: hook payload `message`, VERBATIM, cut at 240 chars, no content filter.
+   *  stop: the LAST non-empty line of `last_assistant_message`, cut at 240 — or, when
+   *  credential-shaped, withheld whole as QUESTION_WITHHELD (same predicate as `action`).
+   *  Omit + `untracked` when there is nothing to show. */
   question?: string;
   question_truncated?: true;
   asked_at: string;
@@ -254,6 +262,16 @@ export interface StoredAnswer {
   answered_at: string;
   status: IntentStatus;
   applied_at: string | null;
+}
+
+/** 018: why a band-3 row stopped being true. Recorded by the daemon (or by hand: manual). */
+export type ResolutionReason = 'moved_on' | 'superseded' | 'session_exited' | 'manual';
+
+/** An ops_intent_resolutions row (018). A resolved row leaves the board. */
+export interface StoredResolution {
+  run_id: string;
+  reason: ResolutionReason;
+  resolved_at: string;
 }
 
 /** An ops_intent_parks row (017): the session was told to park, and its transcript shows it. */
@@ -544,7 +562,7 @@ function intentRequest(c: Collector, p: string, x: unknown) {
   );
   if (!o) return;
   str(c, `${p}.session_id`, o.session_id, { re: /^[A-Za-z0-9_-]+$/, max: 128 });
-  oneOf(c, `${p}.trigger`, o.trigger, ['permission_request', 'notification']);
+  oneOf(c, `${p}.trigger`, o.trigger, ['permission_request', 'notification', 'stop']);
   oneOf(c, `${p}.wait_state`, o.wait_state, ['blocked', 'idle']);
 
   str(c, `${p}.tool_name`, o.tool_name, { re: /^[A-Za-z0-9_.:-]+$/, max: 80 });
@@ -571,6 +589,9 @@ function intentRequest(c: Collector, p: string, x: unknown) {
       if (o[k] !== undefined) c.add(`${p}.${k}`, 'forbidden unless trigger=permission_request');
   if (!isNotification && o.notification_type !== undefined)
     c.add(`${p}.notification_type`, 'forbidden unless trigger=notification');
+  // A Stop row is a finished turn by definition — never blocked (2026-09-25).
+  if (o.trigger === 'stop' && o.wait_state !== undefined && o.wait_state !== 'idle')
+    c.add(`${p}.wait_state`, 'must be idle when trigger=stop');
 
   str(c, `${p}.question`, o.question, { max: WAITING_CAP });
   if (o.question_truncated !== undefined && o.question_truncated !== true)
