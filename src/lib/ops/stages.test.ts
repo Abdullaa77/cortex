@@ -159,3 +159,40 @@ describe('contract: open_mrs[].release_queue', () => {
     }
   });
 });
+
+describe('contract: a GitLab field that could not be read (2026-09-30, ~1 refused snapshot/day)', () => {
+  const repo = () => ({ ...GITLAB.repos[2], open_mrs: [] as unknown[] }) as Record<string, unknown>;
+  const env = (r: Record<string, unknown>) => envelopeOf('gitlab', { repos: [r] });
+
+  for (const k of ['head_sha', 'head_committed_at', 'open_mrs']) {
+    test(`${k} omitted WITH a reason under untracked: accepted`, () => {
+      const r = repo();
+      delete r[k];
+      r.untracked = { [k]: 'fetch failed' };
+      assert.equal(validateEnvelope(env(r), NOW).ok, true);
+    });
+    test(`${k} omitted with NO reason: still refused, by name`, () => {
+      const r = repo();
+      delete r[k];
+      const v = validateEnvelope(env(r), NOW);
+      assert.ok(!v.ok && v.errors.some((e) => e.includes(k)), JSON.stringify(v));
+    });
+  }
+});
+
+describe('pipeline: a repo whose open MRs were not read', () => {
+  test('its MRs are unknown, never "merged or closed"', () => {
+    const gl: GitlabPayload = {
+      repos: [
+        { repo: 'main-backend', project_path: 'x/mb', default_branch: 'master', untracked: { open_mrs: 'fetch failed' } },
+        { repo: 'admin-ui', project_path: 'x/ui', default_branch: 'master', head_sha: SHA('c'), head_committed_at: minutesAgo(9), open_mrs: [] },
+      ],
+    };
+    const b = stagesBand([wave({ slug: 'x', mrs: ['main-backend!5'] }), wave({ slug: 'y', mrs: ['admin-ui!5'] })], gl, NOW);
+    const x = b.columns.review.find((c) => c.slug === 'x')!;
+    assert.equal(x.mrs[0].state, 'unknown');
+    assert.match(x.stageNote!, /not read for this repo/);
+    // The repo that WAS read still judges its own MRs.
+    assert.equal(b.columns.live.find((c) => c.slug === 'y')!.mrs[0].state, 'gone');
+  });
+});
