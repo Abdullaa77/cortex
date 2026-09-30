@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 import { AlertCircle, Lock, RefreshCw } from 'lucide-react';
-import type { Board, CheckView, Freshness, IntentAnswerView, IntentItem, Tone, Tracked } from '@/lib/ops/board';
-import { formatAge } from '@/lib/ops/board';
+import type { Board, CheckView, Freshness, IntentAnswerView, IntentItem, StageCard, StageMr, StagesBand, Tone, Tracked } from '@/lib/ops/board';
+import { formatAge, SHIPPED_WINDOW_DAYS, STAGES, STAGE_WORDS } from '@/lib/ops/board';
 import { ANSWER_CAP, AUTHORIZATIONS, DECISIONS, type Decision } from '@/lib/ops/contract';
 import type { AnswerResult } from '@/hooks/useOps';
 
@@ -126,6 +126,120 @@ function Panel({ children }: { children: React.ReactNode }) {
 
 function Band<T>({ data, children }: { data: Tracked<T>; children: (v: T) => React.ReactNode }) {
   return <Panel>{data.tracked ? children(data.value) : <NotTracked reason={data.reason} />}</Panel>;
+}
+
+// ---------------------------------------------------------------- pipeline
+
+const MR_TONE: Record<StageMr['state'], Tone> = { open: 'amber', queued: 'green', gone: 'grey', unknown: 'grey' };
+
+function MrChip({ m }: { m: StageMr }) {
+  const failed = m.pipeline === 'failed';
+  return (
+    <span
+      className="rounded border px-1 font-mono text-[10px]"
+      style={{ borderColor: `${TONE_COLOR[failed ? 'red' : MR_TONE[m.state]]}66`, color: failed ? TONE_COLOR.red : undefined }}
+      title={`${m.state}${m.draft ? ' · draft' : ''}${m.pipeline ? ` · pipeline ${m.pipeline}` : ''}`}
+    >
+      {m.ref}
+      {m.state === 'queued' && ' · train'}
+      {m.state === 'gone' && ' · closed/merged'}
+      {m.draft && ' · draft'}
+      {failed && ' · red'}
+    </span>
+  );
+}
+
+function StageCardRow({ c }: { c: StageCard }) {
+  return (
+    <div className="px-3 py-2" data-wave={c.slug} data-stage={c.stage ?? c.status}>
+      <div className="flex flex-wrap items-baseline gap-x-2 font-mono text-xs">
+        <span className="text-text-primary">{c.title}</span>
+        {c.waitingOnYou && (
+          <span className="rounded px-1 text-[10px] font-semibold uppercase" style={{ background: `${TONE_COLOR.amber}22`, color: TONE_COLOR.amber }}>
+            you
+          </span>
+        )}
+        {c.active && (
+          <span className="text-[10px]" style={{ color: TONE_COLOR.green }}>
+            ● session on it
+          </span>
+        )}
+        <span className="ml-auto text-[10px] text-text-muted/70">
+          {c.shippedOn ? `shipped ${c.shippedOn}` : `${c.ageDays}d`} · {c.repos.join(', ')}
+        </span>
+      </div>
+      {c.scope && <p className="font-mono text-[10px] text-text-muted/70">{c.scope}</p>}
+      {c.mrs.length > 0 && (
+        <div className="mt-1 flex flex-wrap gap-1">
+          {c.mrs.map((m) => (
+            <MrChip key={m.ref} m={m} />
+          ))}
+        </div>
+      )}
+      {c.blockedBy.length > 0 && <p className="font-mono text-[10px] text-text-muted/70">blocked by {c.blockedBy.join(', ')}</p>}
+      {c.stageNote && <p className="font-mono text-[10px] italic text-text-muted/60">{c.stageNote}</p>}
+      {c.waitingOnYou && <p className="mt-0.5 font-mono text-[11px] leading-relaxed text-text-muted">{c.waitingOnYou}</p>}
+    </div>
+  );
+}
+
+function StageGroup({ title, cards, tone, open = true }: { title: string; cards: StageCard[]; tone: Tone; open?: boolean }) {
+  return (
+    <details open={open && cards.length > 0} className="group">
+      <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-1.5 font-mono text-[11px] uppercase tracking-wide">
+        <Dot tone={cards.length ? tone : 'grey'} />
+        <span className="text-text-primary">{title}</span>
+        <span className="text-text-muted">({cards.length})</span>
+        <span className="ml-auto text-[10px] text-text-muted/50 group-open:hidden">show</span>
+      </summary>
+      {cards.length === 0 ? (
+        <p className="px-3 pb-2 font-mono text-[10px] text-text-muted/60">none</p>
+      ) : (
+        <div className="divide-y divide-border/10 border-t border-border/10">
+          {cards.map((c) => (
+            <StageCardRow key={c.slug} c={c} />
+          ))}
+        </div>
+      )}
+    </details>
+  );
+}
+
+const STAGE_TONE: Record<(typeof STAGES)[number], Tone> = { building: 'amber', review: 'amber', train: 'green', live: 'green' };
+
+/** Every wave by the one stage it is in now — derived in board.ts, never stored. */
+function Pipeline({ p }: { p: StagesBand }) {
+  const you = [...STAGES.flatMap((k) => p.columns[k]), ...p.blocked, ...p.planned].filter((c) => c.waitingOnYou).length;
+  const active = STAGES.flatMap((k) => p.columns[k]).filter((c) => c.active).length;
+  return (
+    <>
+      {/* The strip: how many sit at each step, left to right. */}
+      <div className="flex items-stretch gap-1 px-3 py-2.5 font-mono">
+        {STAGES.map((k, i) => (
+          <div key={k} className="flex flex-1 items-center gap-1">
+            <div className="flex-1 rounded border border-border/40 px-1.5 py-1 text-center" data-stage-count={k}>
+              <div className="text-sm font-semibold" style={{ color: p.columns[k].length ? TONE_COLOR[STAGE_TONE[k]] : undefined }}>
+                {p.columns[k].length}
+              </div>
+              <div className="text-[9px] uppercase leading-tight tracking-wide text-text-muted">{STAGE_WORDS[k]}</div>
+            </div>
+            {i < STAGES.length - 1 && <span className="text-[10px] text-text-muted/50">→</span>}
+          </div>
+        ))}
+      </div>
+      <p className="px-3 pb-2 font-mono text-[10px] text-text-muted">
+        {you} waiting on you · {active} with a session on it now · {p.blocked.length} blocked · {p.parked.length} parked
+        {!p.gitlabKnown && <span style={{ color: TONE_COLOR.amber }}> · GitLab not read — MR stages are guesses</span>}
+      </p>
+      {STAGES.map((k) => (
+        <StageGroup key={k} title={STAGE_WORDS[k]} cards={p.columns[k]} tone={STAGE_TONE[k]} />
+      ))}
+      <StageGroup title="Blocked" cards={p.blocked} tone="red" />
+      <StageGroup title="Up next" cards={p.planned} tone="grey" open={false} />
+      <StageGroup title="Parked" cards={p.parked} tone="grey" open={false} />
+      <StageGroup title={`Shipped (${SHIPPED_WINDOW_DAYS}d)`} cards={p.shipped} tone="green" open={false} />
+    </>
+  );
 }
 
 export type OnAnswer = (runId: string, decision: Decision, text: string) => Promise<AnswerResult>;
@@ -371,6 +485,36 @@ export default function OpsBoard({
         </button>
       </div>
 
+      <SectionHeader title="Pipeline" note="every wave, by stage" />
+      <Band data={board.stages}>{(p) => <Pipeline p={p} />}</Band>
+
+      {(() => {
+        const { blocked, idle, moreCount } = board.intents;
+        const total = blocked.length + idle.length;
+        return (
+          <>
+            <SectionHeader
+              title="Blocked sessions"
+              note={`(${total}${moreCount > 0 ? ` +${moreCount} more` : ''})`}
+            />
+            <Panel>
+              {total === 0 ? (
+                <p className="px-3 py-2 font-mono text-[11px] text-text-muted">no session waiting on you right now</p>
+              ) : (
+                <>
+                  <IntentGroup title="Blocked — needs your answer" items={blocked} emptyCopy="none blocked" onAnswer={onAnswer} />
+                  <IntentGroup title="Idle — waiting for you" items={idle} emptyCopy="none idle" onAnswer={onAnswer} />
+                </>
+              )}
+              {moreCount > 0 && <p className="px-3 py-1.5 font-mono text-[10px] text-text-muted/60">{moreCount} more</p>}
+              <p className="px-3 py-1.5 font-mono text-[10px] italic text-text-muted/50">
+                a row clears within a minute of its session moving on — answered at the terminal, the next tool runs, or it exits
+              </p>
+            </Panel>
+          </>
+        );
+      })()}
+
       <SectionHeader title="Heartbeat" />
       <Panel>
         {!board.reach.ok && (
@@ -483,32 +627,6 @@ export default function OpsBoard({
         }
       </Band>
 
-      {(() => {
-        const { blocked, idle, moreCount } = board.intents;
-        const total = blocked.length + idle.length;
-        return (
-          <>
-            <SectionHeader
-              title="Blocked sessions"
-              note={`(${total}${moreCount > 0 ? ` +${moreCount} more` : ''})`}
-            />
-            <Panel>
-              {total === 0 ? (
-                <p className="px-3 py-2 font-mono text-[11px] text-text-muted">no session waiting on you right now</p>
-              ) : (
-                <>
-                  <IntentGroup title="Blocked — needs your answer" items={blocked} emptyCopy="none blocked" onAnswer={onAnswer} />
-                  <IntentGroup title="Idle — waiting for you" items={idle} emptyCopy="none idle" onAnswer={onAnswer} />
-                </>
-              )}
-              {moreCount > 0 && <p className="px-3 py-1.5 font-mono text-[10px] text-text-muted/60">{moreCount} more</p>}
-              <p className="px-3 py-1.5 font-mono text-[10px] italic text-text-muted/50">
-                a row clears within a minute of its session moving on — answered at the terminal, the next tool runs, or it exits
-              </p>
-            </Panel>
-          </>
-        );
-      })()}
 
       <SectionHeader title="Ready to merge" />
       <Band data={board.ready}>

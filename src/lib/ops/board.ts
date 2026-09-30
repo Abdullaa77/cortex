@@ -24,6 +24,7 @@
 import type {
   Check,
   CheckState,
+  GitlabMr,
   GitlabPayload,
   IntentRequestPayload,
   Decision,
@@ -235,6 +236,63 @@ export interface CommitRow {
   wave: string | null;
 }
 
+/**
+ * The pipeline view (2026-09-30): every wave placed in the one stage it is in
+ * now. The stage is DERIVED here from the wave row + GitLab's open MRs — no
+ * producer sends a stage, so there is no stored value to go stale apart from
+ * its inputs.
+ */
+export const STAGES = ['building', 'review', 'train', 'live'] as const;
+export type Stage = (typeof STAGES)[number];
+
+export const STAGE_WORDS: Record<Stage, string> = {
+  building: 'Building',
+  review: 'MR open',
+  train: 'On the train',
+  live: 'Merged — finishing',
+};
+
+/** Shipped waves stay on the pipeline this long, then leave it. */
+export const SHIPPED_WINDOW_DAYS = 7;
+
+export interface StageMr {
+  ref: string;
+  /** open = on GitLab and not queued · queued = release-queue label · gone = not open (merged or closed) · unknown = GitLab not read or labels not read. */
+  state: 'open' | 'queued' | 'gone' | 'unknown';
+  draft: boolean | null;
+  pipeline: string | null;
+}
+
+export interface StageCard {
+  slug: string;
+  title: string;
+  scope: string | null;
+  repos: string[];
+  status: Wave['status'];
+  /** null for blocked / parked / planned / shipped — they sit beside the pipeline, not in it. */
+  stage: Stage | null;
+  /** Why the stage is a guess, when it is one. Never rendered as certainty. */
+  stageNote: string | null;
+  mrs: StageMr[];
+  /** Scott is the next step: a gate, or the note's "waiting on Scott" line. */
+  waitingOnYou: string | null;
+  /** A live lease — a session holds this wave right now. */
+  active: boolean;
+  blockedBy: string[];
+  ageDays: number;
+  shippedOn: string | null;
+}
+
+export interface StagesBand {
+  columns: Record<Stage, StageCard[]>;
+  blocked: StageCard[];
+  parked: StageCard[];
+  planned: StageCard[];
+  shipped: StageCard[];
+  /** false = GitLab stale or never read; MR stages are then guesses and every such card says so. */
+  gitlabKnown: boolean;
+}
+
 export type Tracked<T> = { tracked: true; value: T } | { tracked: false; reason: string };
 
 export interface Board {
@@ -262,6 +320,8 @@ export interface Board {
    * session blocked in 24h), not an absent signal.
    */
   intents: IntentsBand;
+  /** Every wave by stage. Not tracked only when no waves snapshot ever arrived. */
+  stages: Tracked<StagesBand>;
 }
 
 // ---------------------------------------------------------------- small pieces
@@ -602,6 +662,87 @@ export function readyBand(gitlab: GitlabPayload, waves: Wave[], now: Date) {
   return { mrs, commits, commitsUntracked };
 }
 
+/**
+ * One wave → one stage. Order of the rules is the order of certainty:
+ * status first (the note says so), then `shippable` (the registry checked
+ * every MR merged), then GitLab's open-MR list. A wave whose MRs GitLab did
+ * not describe gets a stage AND a note saying it is a guess.
+ */
+export function stagesBand(waves: Wave[], gitlab: GitlabPayload | null, now: Date): StagesBand {
+  const open = new Map<string, GitlabMr>();
+  if (gitlab) for (const r of gitlab.repos) for (const m of r.open_mrs ?? []) open.set(m.ref, m);
+  const known = gitlab !== null;
+
+  const band: StagesBand = {
+    columns: { building: [], review: [], train: [], live: [] },
+    blocked: [],
+    parked: [],
+    planned: [],
+    shipped: [],
+    gitlabKnown: known,
+  };
+
+  for (const w of waves) {
+    const mrs: StageMr[] = w.mrs.map((ref) => {
+      const m = open.get(ref);
+      if (!known) return { ref, state: 'unknown', draft: null, pipeline: null };
+      if (!m) return { ref, state: 'gone', draft: null, pipeline: null };
+      const state = m.release_queue === true ? 'queued' : m.release_queue === false ? 'open' : 'unknown';
+      return { ref, state, draft: m.draft, pipeline: m.pipeline_status ?? null };
+    });
+    const leaseLive = w.claimed === true && w.lease_expires_at !== undefined && now.getTime() < Date.parse(w.lease_expires_at);
+    const card: StageCard = {
+      slug: w.slug,
+      title: w.title,
+      scope: w.scope ?? null,
+      repos: w.repos,
+      status: w.status,
+      stage: null,
+      stageNote: null,
+      mrs,
+      waitingOnYou: w.waiting_on_scott ?? (w.gate === 'awaiting-confirm' ? 'awaiting your confirm' : null),
+      active: leaseLive,
+      blockedBy: w.blocked_by,
+      ageDays: daysBetween(w.started, now),
+      shippedOn: w.shipped_on ?? null,
+    };
+
+    if (w.status === 'shipped') {
+      if (w.shipped_on && daysBetween(w.shipped_on, now) <= SHIPPED_WINDOW_DAYS) band.shipped.push(card);
+      continue;
+    }
+    if (w.status === 'blocked') { band.blocked.push(card); continue; }
+    if (w.status === 'parked') { band.parked.push(card); continue; }
+    if (w.status === 'planned') { band.planned.push(card); continue; }
+
+    // in-flight
+    const live = mrs.filter((m) => m.state !== 'gone');
+    if (w.shippable === true) card.stage = 'live';
+    else if (mrs.length === 0) card.stage = 'building';
+    else if (!known) {
+      card.stage = 'review';
+      card.stageNote = 'GitLab not read — MR state unknown';
+    } else if (live.length === 0) {
+      card.stage = 'live';
+      card.stageNote = w.shippable === false ? 'no MR open, but not all merged — one was closed?' : 'no MR open — merged or closed';
+    } else if (live.every((m) => m.state === 'queued')) card.stage = 'train';
+    else {
+      card.stage = 'review';
+      if (live.some((m) => m.state === 'unknown')) card.stageNote = 'labels not read — may already be on the train';
+    }
+    band.columns[card.stage].push(card);
+  }
+
+  // Oldest first everywhere it is still moving; shipped newest first.
+  const byAge = (a: StageCard, b: StageCard) => b.ageDays - a.ageDays || a.slug.localeCompare(b.slug);
+  for (const k of STAGES) band.columns[k].sort(byAge);
+  band.blocked.sort(byAge);
+  band.parked.sort(byAge);
+  band.planned.sort(byAge);
+  band.shipped.sort((a, b) => (b.shippedOn ?? '').localeCompare(a.shippedOn ?? '') || a.slug.localeCompare(b.slug));
+  return band;
+}
+
 // ---------------------------------------------------------------- the board
 
 export function boardState(input: BoardInput, now: Date): Board {
@@ -697,5 +838,8 @@ export function boardState(input: BoardInput, now: Date): Board {
     repos,
     controlStrip: ctl ? ctl.payload.checks.map(viewCheck) : null,
     intents: intentsBand(input.intents, now, input.answers, input.parks, input.resolutions),
+    stages: waveRows
+      ? { tracked: true, value: stagesBand(waveRows, gl.state === 'fresh' ? input.gitlab!.payload : null, now) }
+      : { tracked: false, reason: 'no waves snapshot has ever arrived' },
   };
 }

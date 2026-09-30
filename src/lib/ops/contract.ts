@@ -148,6 +148,12 @@ export interface GitlabMr {
   /** Omitted when the MR's current sha has no pipeline. */
   pipeline_status?: 'success' | 'failed' | 'running' | 'pending' | 'canceled' | 'skipped' | 'manual';
   behind_default_by?: number;
+  /**
+   * 2026-09-30: the MR carries the `release-queue` label — it is on the
+   * release train. Omitted when the producer did not read labels (older
+   * producer); absent is "not known", never "not queued".
+   */
+  release_queue?: boolean;
   updated_at: string;
   untracked?: Record<string, string>;
 }
@@ -652,7 +658,7 @@ function gitlab(c: Collector, p: string, x: unknown) {
       str(c, `${cq}.mr`, cm.mr, { re: MR_REF });
     });
     list(c, `${q}.open_mrs`, r.open_mrs, (mq, mv) => {
-      const m = shape(c, mq, mv, ['ref', 'title', 'draft', 'source_branch', 'sha', 'updated_at'], ['pipeline_status', 'behind_default_by', 'untracked']);
+      const m = shape(c, mq, mv, ['ref', 'title', 'draft', 'source_branch', 'sha', 'updated_at'], ['pipeline_status', 'behind_default_by', 'release_queue', 'untracked']);
       if (!m) return;
       str(c, `${mq}.ref`, m.ref, { re: MR_REF });
       str(c, `${mq}.title`, m.title, { max: 300 });
@@ -661,6 +667,7 @@ function gitlab(c: Collector, p: string, x: unknown) {
       str(c, `${mq}.sha`, m.sha, { re: SHA40 });
       oneOf(c, `${mq}.pipeline_status`, m.pipeline_status, ['success', 'failed', 'running', 'pending', 'canceled', 'skipped', 'manual']);
       int(c, `${mq}.behind_default_by`, m.behind_default_by);
+      bool(c, `${mq}.release_queue`, m.release_queue);
       str(c, `${mq}.updated_at`, m.updated_at, { re: ISO_Z });
       untracked(c, `${mq}.untracked`, m.untracked);
     });
