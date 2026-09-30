@@ -162,12 +162,18 @@ export interface GitlabRepo {
   repo: string;
   project_path: string;
   default_branch: string;
-  head_sha: string;
-  head_committed_at: string;
+  /**
+   * head_sha / head_committed_at / open_mrs: omitted ONLY with a reason under
+   * `untracked` (2026-09-30). A GitLab call that drops on a flaky link used to
+   * refuse the whole snapshot (~1/day); now that one field is "not read" and
+   * the rest of the snapshot still lands. Absent without a reason is refused.
+   */
+  head_sha?: string;
+  head_committed_at?: string;
   head_pipeline?: { id: number; status: string; jobs: Record<string, string> };
   prod_sha?: string;
   commits_prod_to_head?: GitlabCommit[];
-  open_mrs: GitlabMr[];
+  open_mrs?: GitlabMr[];
   untracked?: Record<string, string>;
 }
 
@@ -629,8 +635,11 @@ function gitlab(c: Collector, p: string, x: unknown) {
   const o = shape(c, p, x, ['repos']);
   if (!o) return;
   list(c, `${p}.repos`, o.repos, (q, v) => {
-    const r = shape(c, q, v, ['repo', 'project_path', 'default_branch', 'head_sha', 'head_committed_at', 'open_mrs'], ['head_pipeline', 'prod_sha', 'commits_prod_to_head', 'untracked']);
+    const r = shape(c, q, v, ['repo', 'project_path', 'default_branch'], ['head_sha', 'head_committed_at', 'open_mrs', 'head_pipeline', 'prod_sha', 'commits_prod_to_head', 'untracked']);
     if (!r) return;
+    const why = isObj(r.untracked) ? r.untracked : {};
+    for (const k of ['head_sha', 'head_committed_at', 'open_mrs'] as const)
+      if (r[k] === undefined && typeof why[k] !== 'string') c.add(`${q}.${k}`, 'required (or omitted with a reason under untracked)');
     str(c, `${q}.repo`, r.repo, { max: 80 });
     str(c, `${q}.project_path`, r.project_path, { max: 200 });
     str(c, `${q}.default_branch`, r.default_branch, { max: 80 });

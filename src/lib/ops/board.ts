@@ -628,7 +628,7 @@ export function readyBand(gitlab: GitlabPayload, waves: Wave[], now: Date) {
   const commitsUntracked: { repo: string; reason: string }[] = [];
 
   for (const r of gitlab.repos) {
-    for (const m of r.open_mrs) {
+    for (const m of r.open_mrs ?? []) {
       // "Green draft MRs": the batch is drafts that passed, waiting for the evening merge.
       if (!m.draft || m.pipeline_status !== 'success') continue;
       const behind = m.behind_default_by ?? null;
@@ -670,8 +670,15 @@ export function readyBand(gitlab: GitlabPayload, waves: Wave[], now: Date) {
  */
 export function stagesBand(waves: Wave[], gitlab: GitlabPayload | null, now: Date): StagesBand {
   const open = new Map<string, GitlabMr>();
-  if (gitlab) for (const r of gitlab.repos) for (const m of r.open_mrs ?? []) open.set(m.ref, m);
+  // A repo whose open-MR list was not read: its MRs are unknown, never "gone".
+  const unread = new Set<string>();
+  if (gitlab)
+    for (const r of gitlab.repos) {
+      if (r.open_mrs === undefined) unread.add(r.repo);
+      for (const m of r.open_mrs ?? []) open.set(m.ref, m);
+    }
   const known = gitlab !== null;
+  const repoUnread = (ref: string) => unread.has(ref.slice(0, ref.indexOf('!')));
 
   const band: StagesBand = {
     columns: { building: [], review: [], train: [], live: [] },
@@ -685,7 +692,7 @@ export function stagesBand(waves: Wave[], gitlab: GitlabPayload | null, now: Dat
   for (const w of waves) {
     const mrs: StageMr[] = w.mrs.map((ref) => {
       const m = open.get(ref);
-      if (!known) return { ref, state: 'unknown', draft: null, pipeline: null };
+      if (!known || repoUnread(ref)) return { ref, state: 'unknown', draft: null, pipeline: null };
       if (!m) return { ref, state: 'gone', draft: null, pipeline: null };
       const state = m.release_queue === true ? 'queued' : m.release_queue === false ? 'open' : 'unknown';
       return { ref, state, draft: m.draft, pipeline: m.pipeline_status ?? null };
@@ -719,9 +726,9 @@ export function stagesBand(waves: Wave[], gitlab: GitlabPayload | null, now: Dat
     const live = mrs.filter((m) => m.state !== 'gone');
     if (w.shippable === true) card.stage = 'live';
     else if (mrs.length === 0) card.stage = 'building';
-    else if (!known) {
+    else if (!known || (live.length > 0 && live.every((m) => repoUnread(m.ref)))) {
       card.stage = 'review';
-      card.stageNote = 'GitLab not read — MR state unknown';
+      card.stageNote = known ? 'open MRs not read for this repo — MR state unknown' : 'GitLab not read — MR state unknown';
     } else if (live.length === 0) {
       card.stage = 'live';
       card.stageNote = w.shippable === false ? 'no MR open, but not all merged — one was closed?' : 'no MR open — merged or closed';
