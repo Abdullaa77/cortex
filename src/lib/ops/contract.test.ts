@@ -486,3 +486,35 @@ describe('contract v1, 2026-10-15 addition — kind: job_status (lw-4)', () => {
     ]);
   });
 });
+
+describe('contract v1, 2026-10-16 addition — intent_request session_name + job (lw-5)', () => {
+  const row = (over: Record<string, unknown> = {}) =>
+    envelopeOf('intent_request', {
+      session_id: 'sess-named1',
+      trigger: 'stop',
+      wait_state: 'idle',
+      question: 'Done — queued.',
+      asked_at: '2026-09-24T10:00:00Z',
+      ...over,
+    });
+
+  test('a Worker row names its session and its Job; a Solo row names only its session', () => {
+    assert.deepEqual(errorsOf(row({ session_name: 'salary·t2·r3', job: 'salary' })), []);
+    assert.deepEqual(errorsOf(row({ session_name: 'fix-glab-auth' })), []);
+  });
+
+  test('a session name past 24 and a Job that is not a Job name are refused', () => {
+    assert.deepEqual(errorsOf(row({ session_name: 'x'.repeat(25), job: 'Salary Job' })), [
+      '$.payload.session_name: longer than 24',
+      '$.payload.job: does not match /^[a-z0-9][a-z0-9-]*$/',
+    ]);
+    assert.deepEqual(errorsOf(row({ job: 'a-very-long-job' })), ['$.payload.job: longer than 12']);
+  });
+
+  test('empty strings are refused — omit the key', () => {
+    assert.deepEqual(errorsOf(row({ session_name: '', job: '' })), [
+      '$.payload.session_name: empty string is not accepted — omit the key',
+      '$.payload.job: empty string is not accepted — omit the key',
+    ]);
+  });
+});
