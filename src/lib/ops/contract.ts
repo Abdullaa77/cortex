@@ -24,7 +24,7 @@ export const CONTRACT_VERSION = 1;
 export const MAX_BODY_BYTES = 256 * 1024;
 export const WAITING_CAP = 240;
 
-export type Kind = 'session_check' | 'waves' | 'gitlab' | 'intent_request';
+export type Kind = 'session_check' | 'waves' | 'gitlab' | 'intent_request' | 'job_status';
 export type CheckState = 'ok' | 'drift' | 'pending' | 'red' | 'unknown' | 'not_deployed';
 export type CheckMethod = 'exact' | 'timing_proxy' | 'query' | 'heartbeat' | 'probe';
 /**
@@ -313,11 +313,64 @@ export interface PendingIntent {
   parked_at: string | null;
 }
 
+/**
+ * §5d, 2026-10-15 (map lead-and-workers, ticket lw-4) — one Job card. A Job is
+ * a wave map run by one Lead session and its Workers (ADR 0034). Producer:
+ * job-card (Brain Scripts/cortex-ops/job-card.js), pushed when the Lead writes
+ * a summary and when a session of the Job stops.
+ *
+ * The SUMMARY is a few sentences of plain English: written by the Lead
+ * (`summary_by: lead`), or made by a small model from the session's own recent
+ * assistant text (`auto`). The producer drops the summary whole when its input
+ * or its output is credential-shaped — this board never sees a masked one.
+ *
+ * `tickets` / `acceptance` are computed from the map's wave notes at emit time,
+ * never stored on the box: a card cannot say "3 left" after they shipped.
+ */
+export type JobStatus = 'building' | 'waiting_on_you' | 'queued' | 'shipped' | 'idle';
+export const JOB_STATUSES: readonly JobStatus[] = ['building', 'waiting_on_you', 'queued', 'shipped', 'idle'];
+export const SUMMARY_CAP = 1000;
+
+export interface JobWorker {
+  /** `<job>·t<N>`, a relay appends `·r<N>`; ≤ 24. */
+  name: string;
+  ticket: string;
+  /** Omitted when the dispatch did not record one. */
+  model?: 'opus' | 'sonnet';
+  /** One sentence on what this Worker is doing; ≤ 240. */
+  line?: string;
+  line_truncated?: true;
+  line_at?: string;
+}
+
+export interface JobStatusPayload {
+  job: string;
+  map: string;
+  /** The Lead's session name (the Job name). */
+  lead: string;
+  status: JobStatus;
+  summary?: string;
+  /** REQUIRED iff summary is present. */
+  summary_by?: 'lead' | 'auto';
+  /** REQUIRED iff summary is present. */
+  summary_at?: string;
+  workers: JobWorker[];
+  tickets: { done: number; left: number };
+  acceptance?: { ticked: number; total: number };
+  /** Relays the Job has taken (Lead + Workers). */
+  relays: number;
+  /** Only while status = waiting_on_you; ≤ 240. */
+  waiting_on_you?: string;
+  waiting_on_you_truncated?: true;
+  updated_at: string;
+  untracked?: Record<string, string>;
+}
+
 export interface Envelope<K extends Kind = Kind> {
   v: 1;
   kind: K;
   run_id: string;
-  producer: { name: 'session-check' | 'wave' | 'gitlab-poll' | 'intent-hook'; host: string; version: string };
+  producer: { name: 'session-check' | 'wave' | 'gitlab-poll' | 'intent-hook' | 'job-card'; host: string; version: string };
   started_at: string;
   finished_at: string;
   payload: K extends 'session_check'
@@ -326,7 +379,9 @@ export interface Envelope<K extends Kind = Kind> {
       ? WavesPayload
       : K extends 'gitlab'
         ? GitlabPayload
-        : IntentRequestPayload;
+        : K extends 'intent_request'
+          ? IntentRequestPayload
+          : JobStatusPayload;
 }
 
 export type Validation = { ok: true; envelope: Envelope } | { ok: false; errors: string[] };
@@ -338,8 +393,24 @@ export type Validation = { ok: true; envelope: Envelope } | { ok: false; errors:
  * local paths off this box; the hook writes it to a local sidecar instead.
  * `tool_input` carries file contents for Write/Edit and anything at all for
  * MCP tools — only the `action` projection (contract §5b) ever leaves the box.
+ * 2026-10-15 (019, job_status): `transcript`, `tool_output` and `tool_response`
+ * join — a Job card is made FROM a transcript, and must never carry one.
  */
-export const FORBIDDEN_KEYS = ['body', 'note', 'content', 'markdown', 'worktree', 'chat', 'source_line', 'cwd', 'transcript_path', 'tool_input'];
+export const FORBIDDEN_KEYS = [
+  'body',
+  'note',
+  'content',
+  'markdown',
+  'worktree',
+  'chat',
+  'source_line',
+  'cwd',
+  'transcript_path',
+  'tool_input',
+  'transcript',
+  'tool_output',
+  'tool_response',
+];
 
 // ---------------------------------------------------------------- primitives
 
@@ -616,6 +687,69 @@ function intentRequest(c: Collector, p: string, x: unknown) {
   untracked(c, `${p}.untracked`, o.untracked);
 }
 
+const JOB = /^[a-z0-9][a-z0-9-]*$/;
+
+function flagged(c: Collector, p: string, o: Obj, key: string) {
+  const f = `${key}_truncated`;
+  if (o[f] !== undefined && o[f] !== true) c.add(`${p}.${f}`, 'must be true, or omitted');
+  if (o[f] === true && o[key] === undefined) c.add(`${p}.${f}`, `set without ${key}`);
+}
+
+function jobStatus(c: Collector, p: string, x: unknown) {
+  const o = shape(
+    c,
+    p,
+    x,
+    ['job', 'map', 'lead', 'status', 'workers', 'tickets', 'relays', 'updated_at'],
+    ['summary', 'summary_by', 'summary_at', 'acceptance', 'waiting_on_you', 'waiting_on_you_truncated', 'untracked']
+  );
+  if (!o) return;
+  str(c, `${p}.job`, o.job, { max: 12, re: JOB });
+  str(c, `${p}.map`, o.map, { max: 200 });
+  str(c, `${p}.lead`, o.lead, { max: 24 });
+  oneOf(c, `${p}.status`, o.status, JOB_STATUSES);
+
+  str(c, `${p}.summary`, o.summary, { max: SUMMARY_CAP });
+  oneOf(c, `${p}.summary_by`, o.summary_by, ['lead', 'auto']);
+  str(c, `${p}.summary_at`, o.summary_at, { re: ISO_Z });
+  for (const k of ['summary_by', 'summary_at'] as const) {
+    if (o.summary !== undefined && o[k] === undefined) c.add(`${p}.${k}`, 'required when summary is present');
+    if (o.summary === undefined && o[k] !== undefined) c.add(`${p}.${k}`, 'forbidden without summary');
+  }
+
+  list(c, `${p}.workers`, o.workers, (q, v) => {
+    const w = shape(c, q, v, ['name', 'ticket'], ['model', 'line', 'line_truncated', 'line_at']);
+    if (!w) return;
+    str(c, `${q}.name`, w.name, { max: 24 });
+    str(c, `${q}.ticket`, w.ticket, { max: 200 });
+    oneOf(c, `${q}.model`, w.model, ['opus', 'sonnet']);
+    str(c, `${q}.line`, w.line, { max: WAITING_CAP });
+    flagged(c, q, w, 'line');
+    str(c, `${q}.line_at`, w.line_at, { re: ISO_Z });
+  });
+
+  const t = o.tickets === undefined ? null : shape(c, `${p}.tickets`, o.tickets, ['done', 'left']);
+  if (t) {
+    int(c, `${p}.tickets.done`, t.done);
+    int(c, `${p}.tickets.left`, t.left);
+  }
+  const a = o.acceptance === undefined ? null : shape(c, `${p}.acceptance`, o.acceptance, ['ticked', 'total']);
+  if (a) {
+    int(c, `${p}.acceptance.ticked`, a.ticked);
+    int(c, `${p}.acceptance.total`, a.total);
+    if (typeof a.ticked === 'number' && typeof a.total === 'number' && a.ticked > a.total)
+      c.add(`${p}.acceptance.ticked`, 'more than total');
+  }
+  int(c, `${p}.relays`, o.relays);
+
+  str(c, `${p}.waiting_on_you`, o.waiting_on_you, { max: WAITING_CAP });
+  flagged(c, p, o, 'waiting_on_you');
+  if (o.waiting_on_you !== undefined && o.status !== 'waiting_on_you')
+    c.add(`${p}.waiting_on_you`, 'forbidden unless status=waiting_on_you');
+  str(c, `${p}.updated_at`, o.updated_at, { re: ISO_Z });
+  untracked(c, `${p}.untracked`, o.untracked);
+}
+
 function waves(c: Collector, p: string, x: unknown) {
   const o = shape(c, p, x, ['waves'], ['registry_commit']);
   if (!o) return;
@@ -695,11 +829,11 @@ export function validateEnvelope(x: unknown, now: Date): Validation {
   if (!o) return { ok: false, errors: c.errors };
 
   if (o.v !== CONTRACT_VERSION) c.add('$.v', `must be ${CONTRACT_VERSION}`);
-  oneOf(c, '$.kind', o.kind, ['session_check', 'waves', 'gitlab', 'intent_request']);
+  oneOf(c, '$.kind', o.kind, ['session_check', 'waves', 'gitlab', 'intent_request', 'job_status']);
   str(c, '$.run_id', o.run_id, { re: UUID });
   const pr = shape(c, '$.producer', o.producer, ['name', 'host', 'version']);
   if (pr) {
-    oneOf(c, '$.producer.name', pr.name, ['session-check', 'wave', 'gitlab-poll', 'intent-hook']);
+    oneOf(c, '$.producer.name', pr.name, ['session-check', 'wave', 'gitlab-poll', 'intent-hook', 'job-card']);
     str(c, '$.producer.host', pr.host, { max: 100 });
     str(c, '$.producer.version', pr.version, { max: 64 });
   }
@@ -716,6 +850,7 @@ export function validateEnvelope(x: unknown, now: Date): Validation {
   else if (o.kind === 'waves') waves(c, '$.payload', o.payload);
   else if (o.kind === 'gitlab') gitlab(c, '$.payload', o.payload);
   else if (o.kind === 'intent_request') intentRequest(c, '$.payload', o.payload);
+  else if (o.kind === 'job_status') jobStatus(c, '$.payload', o.payload);
 
   return c.errors.length ? { ok: false, errors: c.errors } : { ok: true, envelope: o as unknown as Envelope };
 }

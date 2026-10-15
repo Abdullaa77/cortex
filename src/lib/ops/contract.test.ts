@@ -368,3 +368,121 @@ describe('contract v1, 2026-09-25 addition — trigger: stop', () => {
     ]);
   });
 });
+
+describe('contract v1, 2026-10-15 addition — kind: job_status (lw-4)', () => {
+  const card = (over: Record<string, unknown> = {}) =>
+    envelopeOf('job_status', {
+      job: 'salary',
+      map: 'lead-and-workers',
+      lead: 'salary',
+      status: 'building',
+      summary: 'Two Workers are building the payroll export. The Lead is waiting on t2 to finish its tests before starting t3.',
+      summary_by: 'lead',
+      summary_at: '2026-09-23T17:58:00Z',
+      workers: [
+        { name: 'salary·t1', ticket: 'salary-export', model: 'sonnet', line: 'Writing the CSV columns.', line_at: '2026-09-23T17:55:00Z' },
+        { name: 'salary·t2·r2', ticket: 'salary-tests' },
+      ],
+      tickets: { done: 1, left: 3 },
+      acceptance: { ticked: 4, total: 11 },
+      relays: 2,
+      updated_at: '2026-09-23T17:59:00Z',
+      ...over,
+    });
+
+  test('a full card, and a minimal one (no summary, no workers), are accepted', () => {
+    assert.deepEqual(errorsOf(card()), []);
+    const min = card({ workers: [] });
+    const p = min.payload as Record<string, unknown>;
+    delete p.summary;
+    delete p.summary_by;
+    delete p.summary_at;
+    delete p.acceptance;
+    assert.deepEqual(errorsOf(min), []);
+  });
+
+  test('producer.name "job-card" is accepted', () => {
+    const e = card();
+    assert.equal((e.producer as { name: string }).name, 'job-card');
+    assert.deepEqual(errorsOf(e), []);
+  });
+
+  test('job, map, lead, status, workers, tickets, relays and updated_at are required', () => {
+    assert.deepEqual(errorsOf(envelopeOf('job_status', {})), [
+      '$.payload.job: required',
+      '$.payload.map: required',
+      '$.payload.lead: required',
+      '$.payload.status: required',
+      '$.payload.workers: required',
+      '$.payload.tickets: required',
+      '$.payload.relays: required',
+      '$.payload.updated_at: required',
+    ]);
+  });
+
+  test('status is one of the five; job is a short slug', () => {
+    assert.deepEqual(errorsOf(card({ status: 'working', job: 'A very long job name' })), [
+      '$.payload.job: longer than 12',
+      '$.payload.job: does not match /^[a-z0-9][a-z0-9-]*$/',
+      '$.payload.status: must be one of building|waiting_on_you|queued|shipped|idle',
+    ]);
+  });
+
+  test('summary rides with who wrote it and when — each without the others is refused', () => {
+    const e = card();
+    delete (e.payload as Record<string, unknown>).summary_by;
+    assert.deepEqual(errorsOf(e), ['$.payload.summary_by: required when summary is present']);
+    const f = card();
+    delete (f.payload as Record<string, unknown>).summary;
+    assert.deepEqual(errorsOf(f), ['$.payload.summary_by: forbidden without summary', '$.payload.summary_at: forbidden without summary']);
+    assert.deepEqual(errorsOf(card({ summary_by: 'scott' })), ['$.payload.summary_by: must be one of lead|auto']);
+  });
+
+  test('summary over 1000 is refused — a few sentences, not a transcript', () => {
+    assert.deepEqual(errorsOf(card({ summary: 'x'.repeat(1001) })), ['$.payload.summary: longer than 1000']);
+  });
+
+  test('waiting_on_you carries the question only while the status says so', () => {
+    assert.deepEqual(errorsOf(card({ status: 'waiting_on_you', waiting_on_you: 'Ship the export on Friday or Monday?' })), []);
+    assert.deepEqual(errorsOf(card({ waiting_on_you: 'Friday or Monday?' })), ['$.payload.waiting_on_you: forbidden unless status=waiting_on_you']);
+    assert.deepEqual(errorsOf(card({ status: 'waiting_on_you', waiting_on_you: 'q'.repeat(241) })), ['$.payload.waiting_on_you: longer than 240']);
+    assert.deepEqual(errorsOf(card({ status: 'waiting_on_you', waiting_on_you_truncated: true })), [
+      '$.payload.waiting_on_you_truncated: set without waiting_on_you',
+    ]);
+  });
+
+  test('a worker: model is opus|sonnet, a line ≤ 240, unknown keys refused', () => {
+    assert.deepEqual(
+      errorsOf(card({ workers: [{ name: 'salary·t1', ticket: 'x', model: 'haiku', line: 'l'.repeat(241), pid: 4 }] })),
+      [
+        '$.payload.workers[0].pid: unknown key',
+        '$.payload.workers[0].model: must be one of opus|sonnet',
+        '$.payload.workers[0].line: longer than 240',
+      ]
+    );
+  });
+
+  test('done/left and acceptance ticks are counts — never null, never negative', () => {
+    assert.deepEqual(errorsOf(card({ tickets: { done: -1, left: null }, acceptance: { ticked: 5, total: 4 } })), [
+      '$.payload.tickets.done: must be an integer ≥ 0',
+      '$.payload.tickets.left: null is not accepted',
+      '$.payload.acceptance.ticked: more than total',
+    ]);
+  });
+
+  test('cwd, transcript, tool input/output and note-shaped keys are refused at any depth', () => {
+    const e = card({ cwd: '/home/x', transcript: 'all of it', tool_output: 'x', note: 'y' });
+    (e.payload as { workers: Record<string, unknown>[] }).workers[0].tool_input = { command: 'ls' };
+    (e.payload as { workers: Record<string, unknown>[] }).workers[1].tool_response = 'x';
+    (e.payload as { workers: Record<string, unknown>[] }).workers[1].content = 'x';
+    assert.deepEqual(errorsOf(e), [
+      '$.payload.cwd: forbidden key',
+      '$.payload.transcript: forbidden key',
+      '$.payload.tool_output: forbidden key',
+      '$.payload.note: forbidden key',
+      '$.payload.workers[0].tool_input: forbidden key',
+      '$.payload.workers[1].tool_response: forbidden key',
+      '$.payload.workers[1].content: forbidden key',
+    ]);
+  });
+});
