@@ -2,21 +2,25 @@
 
 import AppShell from '@/components/layout/AppShell';
 import LoadingState from '@/components/ui/LoadingState';
-import OpsBoard from '@/components/ops/OpsBoard';
-import { useOps } from '@/hooks/useOps';
+import JobsBoard from '@/components/ops/JobsBoard';
+import { useJobs } from '@/hooks/useJobs';
 
-/** The Command Centre. Scott-only by RLS on ops_runs/ops_intents; its one write is an answer (015). */
+/**
+ * The Jobs screen (lw-5, 2026-10-16): view only, Scott-only by RLS on
+ * ops_runs. The old Command Centre bands left this page; their routes and
+ * tables stay for now (spec: a later cleanup).
+ */
 export default function OpsPage() {
-  const { board, loading, refetch, answer } = useOps();
+  const { screen, loading } = useJobs();
 
   return (
     <AppShell>
-      {loading || !board ? (
+      {loading || !screen ? (
         <div className="p-6">
           <LoadingState />
         </div>
       ) : (
-        <OpsBoard board={board} onRefresh={refetch} onAnswer={answer} />
+        <JobsBoard screen={screen} />
       )}
     </AppShell>
   );

@@ -234,6 +234,17 @@ export interface IntentRequestPayload {
   repo?: string;
   /** Omitted in v1 (not derivable yet) with `untracked`. */
   wave_slug?: string;
+  /**
+   * 2026-10-16 (lw-5): the session's short name (`salary·t2`, a Solo session's
+   * auto name), ≤ 24. Omitted when the session has none. Display only.
+   */
+  session_name?: string;
+  /**
+   * 2026-10-16 (lw-5): the Job this session belongs to (Lead or Worker), the
+   * same name as job_status `job`. Omitted for a Solo session — that absence
+   * is what puts a session on the Jobs screen's Solo lines.
+   */
+  job?: string;
   untracked?: Record<string, string>;
 }
 
@@ -623,6 +634,9 @@ function wave(c: Collector, p: string, x: unknown) {
     c.add(`${p}.shippable_checked_at`, 'forbidden without shippable');
 }
 
+/** A Job name: job_status `job`, intent_request `job`. */
+const JOB = /^[a-z0-9][a-z0-9-]*$/;
+
 function intentRequest(c: Collector, p: string, x: unknown) {
   const o = shape(
     c,
@@ -640,6 +654,8 @@ function intentRequest(c: Collector, p: string, x: unknown) {
       'question_truncated',
       'repo',
       'wave_slug',
+      'session_name',
+      'job',
       'untracked',
     ]
   );
@@ -647,6 +663,8 @@ function intentRequest(c: Collector, p: string, x: unknown) {
   str(c, `${p}.session_id`, o.session_id, { re: /^[A-Za-z0-9_-]+$/, max: 128 });
   oneOf(c, `${p}.trigger`, o.trigger, ['permission_request', 'notification', 'stop']);
   oneOf(c, `${p}.wait_state`, o.wait_state, ['blocked', 'idle']);
+  str(c, `${p}.session_name`, o.session_name, { max: 24 });
+  str(c, `${p}.job`, o.job, { max: 12, re: JOB });
 
   str(c, `${p}.tool_name`, o.tool_name, { re: /^[A-Za-z0-9_.:-]+$/, max: 80 });
   str(c, `${p}.action`, o.action, { max: WAITING_CAP });
@@ -686,8 +704,6 @@ function intentRequest(c: Collector, p: string, x: unknown) {
   str(c, `${p}.wave_slug`, o.wave_slug, { max: 200 });
   untracked(c, `${p}.untracked`, o.untracked);
 }
-
-const JOB = /^[a-z0-9][a-z0-9-]*$/;
 
 function flagged(c: Collector, p: string, o: Obj, key: string) {
   const f = `${key}_truncated`;
