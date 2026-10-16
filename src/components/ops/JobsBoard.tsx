@@ -6,7 +6,7 @@ import { TONE_COLOR } from './OpsBoard';
  * The Jobs screen (lw-5). View only — nothing on it is a button or a link:
  * Scott manages from the terminal or the Claude mobile app (2026-10-15).
  *
- * Laptop: a 3-column grid that holds ~6 Jobs at 1440×900. Phone (< sm): cards
+ * Laptop: full-width rows (layout B, Scott's pick 2026-10-16) — stats left, summary right — ~6 Jobs at 1440×900. Phone (< sm): cards
  * stack and shrink to two lines — name + status + done/total, then the
  * waiting question or the summary, cut to one line.
  */
@@ -35,49 +35,57 @@ function Card({ card }: { card: JobCard }) {
   const second = card.waiting ? `⏸ ${card.waiting}` : (card.summary ?? 'no summary yet');
   return (
     <div
-      className="flex min-w-0 flex-col gap-1 rounded-lg border border-border bg-surface px-3 py-2 sm:gap-1.5 sm:py-2.5"
+      className="min-w-0 rounded-lg border border-border bg-surface px-3 py-2 sm:py-2.5"
       style={{ borderColor: card.state === 'waiting_on_you' ? TONE_COLOR.amber : undefined }}
       data-job={card.job}
       data-state={card.state}
     >
-      <div className="flex items-center gap-2">
-        <span className="truncate text-sm font-bold text-text-primary">{card.job}</span>
-        <Pill card={card} />
-        <span className="ml-auto shrink-0 text-[11px] text-text-muted">
-          {card.tickets.done}/{total} · {formatAge(card.ageMin)}
-        </span>
-      </div>
+      {/* Laptop: stats left, words right. Phone: the left column is just the head row. */}
+      <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:gap-4">
+        <div className="flex min-w-0 flex-col gap-1.5 sm:w-[260px] sm:shrink-0">
+          <div className="flex items-center gap-2">
+            <span className="truncate text-sm font-bold text-text-primary">{card.job}</span>
+            <Pill card={card} />
+            <span className="ml-auto shrink-0 text-[11px] text-text-muted">
+              {card.tickets.done}/{total} · {formatAge(card.ageMin)}
+            </span>
+          </div>
 
-      {/* Phone: the one second line. */}
-      <p
-        className="truncate font-sans text-xs sm:hidden"
-        style={{ color: card.waiting ? TONE_COLOR.amber : '#C8C8D0' }}
-      >
-        {second}
-      </p>
-
-      {/* Laptop: the full card. */}
-      <div className="hidden flex-col gap-1.5 sm:flex">
-        <div className="h-1 overflow-hidden rounded-sm bg-surface2">
-          <div className="h-full bg-accent" style={{ width: `${pct}%` }} />
+          <div className="hidden flex-col gap-1.5 sm:flex">
+            <div className="h-1 overflow-hidden rounded-sm bg-surface2">
+              <div className="h-full bg-accent" style={{ width: `${pct}%` }} />
+            </div>
+            <p className="text-[11px] text-text-muted">
+              {card.tickets.done} done · {card.tickets.left} left
+              {card.acceptance && ` · ${card.acceptance.ticked}/${card.acceptance.total} ticks`} · {card.relays} relays
+            </p>
+          </div>
         </div>
-        <p className="text-[11px] text-text-muted">
-          {card.tickets.done} done · {card.tickets.left} left
-          {card.acceptance && ` · ${card.acceptance.ticked}/${card.acceptance.total} ticks`} · {card.relays} relays
+
+        {/* Phone: the one second line. */}
+        <p
+          className="truncate font-sans text-xs sm:hidden"
+          style={{ color: card.waiting ? TONE_COLOR.amber : '#C8C8D0' }}
+        >
+          {second}
         </p>
-        {card.waiting && <p className="text-xs" style={{ color: TONE_COLOR.amber }}>⏸ {card.waiting}</p>}
-        {card.summary ? (
-          <p className="line-clamp-4 font-sans text-[12.5px] leading-snug text-[#C8C8D0]">{card.summary}</p>
-        ) : (
-          <p className="text-[11px] italic text-text-muted/60">— no summary yet</p>
-        )}
-        {card.workers.map((w) => (
-          <p key={w.name} className="truncate text-[11px] text-text-muted">
-            <span className="text-text-primary">{w.name}</span> · {w.ticket}
-            {w.model && ` · ${w.model}`}
-            {w.line && ` — ${w.line}`}
-          </p>
-        ))}
+
+        {/* Laptop: the words. */}
+        <div className="hidden min-w-0 flex-1 flex-col gap-1 sm:flex">
+          {card.waiting && <p className="text-xs" style={{ color: TONE_COLOR.amber }}>⏸ {card.waiting}</p>}
+          {card.summary ? (
+            <p className="line-clamp-4 font-sans text-[12.5px] leading-snug text-[#C8C8D0]">{card.summary}</p>
+          ) : (
+            <p className="text-[11px] italic text-text-muted/60">— no summary yet</p>
+          )}
+          {card.workers.map((w) => (
+            <p key={w.name} className="truncate text-[11px] text-text-muted">
+              <span className="text-text-primary">{w.name}</span> · {w.ticket}
+              {w.model && ` · ${w.model}`}
+              {w.line && ` — ${w.line}`}
+            </p>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -120,7 +128,7 @@ export default function JobsBoard({ screen }: { screen: JobsScreen }) {
 
       <Heading title="Jobs" />
       {jobs.length ? (
-        <div className="grid grid-cols-1 gap-1.5 sm:gap-2.5 lg:grid-cols-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-1.5 sm:gap-2">
           {jobs.map((c) => (
             <Card key={c.job} card={c} />
           ))}
