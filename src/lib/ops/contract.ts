@@ -24,7 +24,7 @@ export const CONTRACT_VERSION = 1;
 export const MAX_BODY_BYTES = 256 * 1024;
 export const WAITING_CAP = 240;
 
-export type Kind = 'session_check' | 'waves' | 'gitlab' | 'intent_request' | 'job_status';
+export type Kind = 'session_check' | 'waves' | 'gitlab' | 'intent_request' | 'job_status' | 'tickets';
 export type CheckState = 'ok' | 'drift' | 'pending' | 'red' | 'unknown' | 'not_deployed';
 export type CheckMethod = 'exact' | 'timing_proxy' | 'query' | 'heartbeat' | 'probe';
 /**
@@ -377,11 +377,45 @@ export interface JobStatusPayload {
   untracked?: Record<string, string>;
 }
 
+/**
+ * §5e (2026-11-11, 020, wave workflow-v2, ticket T-1) — the ticket ledger,
+ * pushed whole by `ticket` after every write. A ticket is one thing Scott
+ * asked for (`T-17`); the board shows each in its status column. Scott's
+ * verbatim words stay on the laptop — only the title travels.
+ */
+export type TicketStatus = 'new' | 'building' | 'needs-you' | 'in-queue' | 'live' | 'done';
+export const TICKET_STATUSES: readonly TicketStatus[] = ['new', 'building', 'needs-you', 'in-queue', 'live', 'done'];
+export const TICKET_TITLE_CAP = 120;
+export const TICKETS_MAX = 500;
+
+export interface TicketRow {
+  /** `T-<n>`. */
+  id: string;
+  title: string;
+  status: TicketStatus;
+  /** code / question / data / … — omitted for code. ≤ 24. */
+  kind?: string;
+  /** The next step, one line; ≤ 240. */
+  next?: string;
+  next_truncated?: true;
+  waves: string[];
+  /** `repo!iid`. */
+  mrs: string[];
+  heard_at: string;
+  updated_at: string;
+  /** Times it went back from live/done to an earlier column. */
+  reopened: number;
+}
+
+export interface TicketsPayload {
+  tickets: TicketRow[];
+}
+
 export interface Envelope<K extends Kind = Kind> {
   v: 1;
   kind: K;
   run_id: string;
-  producer: { name: 'session-check' | 'wave' | 'gitlab-poll' | 'intent-hook' | 'job-card'; host: string; version: string };
+  producer: { name: 'session-check' | 'wave' | 'gitlab-poll' | 'intent-hook' | 'job-card' | 'ticket'; host: string; version: string };
   started_at: string;
   finished_at: string;
   payload: K extends 'session_check'
@@ -392,7 +426,9 @@ export interface Envelope<K extends Kind = Kind> {
         ? GitlabPayload
         : K extends 'intent_request'
           ? IntentRequestPayload
-          : JobStatusPayload;
+          : K extends 'job_status'
+            ? JobStatusPayload
+            : TicketsPayload;
 }
 
 export type Validation = { ok: true; envelope: Envelope } | { ok: false; errors: string[] };
@@ -766,6 +802,34 @@ function jobStatus(c: Collector, p: string, x: unknown) {
   untracked(c, `${p}.untracked`, o.untracked);
 }
 
+const TICKET_ID = /^T-[1-9][0-9]*$/;
+/** A wave slug, as `wave` writes it. */
+const WAVE_SLUG = /^[a-z0-9][a-z0-9.-]*$/;
+
+function tickets(c: Collector, p: string, x: unknown) {
+  const o = shape(c, p, x, ['tickets']);
+  if (!o) return;
+  if (Array.isArray(o.tickets) && o.tickets.length > TICKETS_MAX) c.add(`${p}.tickets`, `more than ${TICKETS_MAX}`);
+  const seen = new Set<unknown>();
+  list(c, `${p}.tickets`, o.tickets, (q, v) => {
+    const t = shape(c, q, v, ['id', 'title', 'status', 'waves', 'mrs', 'heard_at', 'updated_at', 'reopened'], ['kind', 'next', 'next_truncated']);
+    if (!t) return;
+    str(c, `${q}.id`, t.id, { re: TICKET_ID });
+    if (seen.has(t.id)) c.add(`${q}.id`, 'duplicate');
+    seen.add(t.id);
+    str(c, `${q}.title`, t.title, { max: TICKET_TITLE_CAP });
+    oneOf(c, `${q}.status`, t.status, TICKET_STATUSES);
+    str(c, `${q}.kind`, t.kind, { max: 24 });
+    str(c, `${q}.next`, t.next, { max: WAITING_CAP });
+    flagged(c, q, t, 'next');
+    list(c, `${q}.waves`, t.waves, (wq, w) => str(c, wq, w, { max: 80, re: WAVE_SLUG }));
+    list(c, `${q}.mrs`, t.mrs, (mq, m) => str(c, mq, m, { re: MR_REF }));
+    str(c, `${q}.heard_at`, t.heard_at, { re: ISO_Z });
+    str(c, `${q}.updated_at`, t.updated_at, { re: ISO_Z });
+    int(c, `${q}.reopened`, t.reopened);
+  });
+}
+
 function waves(c: Collector, p: string, x: unknown) {
   const o = shape(c, p, x, ['waves'], ['registry_commit']);
   if (!o) return;
@@ -845,11 +909,11 @@ export function validateEnvelope(x: unknown, now: Date): Validation {
   if (!o) return { ok: false, errors: c.errors };
 
   if (o.v !== CONTRACT_VERSION) c.add('$.v', `must be ${CONTRACT_VERSION}`);
-  oneOf(c, '$.kind', o.kind, ['session_check', 'waves', 'gitlab', 'intent_request', 'job_status']);
+  oneOf(c, '$.kind', o.kind, ['session_check', 'waves', 'gitlab', 'intent_request', 'job_status', 'tickets']);
   str(c, '$.run_id', o.run_id, { re: UUID });
   const pr = shape(c, '$.producer', o.producer, ['name', 'host', 'version']);
   if (pr) {
-    oneOf(c, '$.producer.name', pr.name, ['session-check', 'wave', 'gitlab-poll', 'intent-hook', 'job-card']);
+    oneOf(c, '$.producer.name', pr.name, ['session-check', 'wave', 'gitlab-poll', 'intent-hook', 'job-card', 'ticket']);
     str(c, '$.producer.host', pr.host, { max: 100 });
     str(c, '$.producer.version', pr.version, { max: 64 });
   }
@@ -867,6 +931,7 @@ export function validateEnvelope(x: unknown, now: Date): Validation {
   else if (o.kind === 'gitlab') gitlab(c, '$.payload', o.payload);
   else if (o.kind === 'intent_request') intentRequest(c, '$.payload', o.payload);
   else if (o.kind === 'job_status') jobStatus(c, '$.payload', o.payload);
+  else if (o.kind === 'tickets') tickets(c, '$.payload', o.payload);
 
   return c.errors.length ? { ok: false, errors: c.errors } : { ok: true, envelope: o as unknown as Envelope };
 }

@@ -178,7 +178,7 @@ export function envelopeOf<K extends Envelope['kind']>(kind: K, payload: unknown
     run_id: '3f1c2b7a-0000-4000-8000-000000000001',
     producer: {
       name:
-        kind === 'waves' ? 'wave' : kind === 'gitlab' ? 'gitlab-poll' : kind === 'intent_request' ? 'intent-hook' : kind === 'job_status' ? 'job-card' : 'session-check',
+        kind === 'waves' ? 'wave' : kind === 'gitlab' ? 'gitlab-poll' : kind === 'intent_request' ? 'intent-hook' : kind === 'job_status' ? 'job-card' : kind === 'tickets' ? 'ticket' : 'session-check',
       host: 'hp2-wsl',
       version: 'c1e4581',
     },

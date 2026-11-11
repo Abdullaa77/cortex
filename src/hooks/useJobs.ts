@@ -4,7 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSupabase } from '@/components/providers/SupabaseProvider';
 import { INTENTS_WINDOW_MS, type Reach, type StoredRun } from '@/lib/ops/board';
 import { jobsScreen, type JobsInput, type JobsScreen } from '@/lib/ops/jobs';
-import type { GitlabPayload, IntentRequestPayload, JobStatusPayload, SessionCheckPayload, StoredResolution } from '@/lib/ops/contract';
+import { ticketsBoard, type TicketsBoard } from '@/lib/ops/tickets';
+import type { GitlabPayload, IntentRequestPayload, JobStatusPayload, SessionCheckPayload, StoredResolution, TicketsPayload } from '@/lib/ops/contract';
 import { classifyFailure } from './useOps';
 
 const RUN_SELECT = 'run_id, finished_at, received_at, payload';
@@ -26,10 +27,12 @@ const EMPTY: Omit<JobsInput, 'reach'> = { live: null, gitlab: null, jobs: [], in
  * "I just want to see there not manage"). Five queries every 30 s, and a clock
  * tick beside them so ages advance and STALE arrives on time.
  */
-export function useJobs(): { screen: JobsScreen | null; loading: boolean } {
+export function useJobs(): { screen: JobsScreen | null; tickets: TicketsBoard | null; loading: boolean } {
   const { supabase, session } = useSupabase();
   const userId = session?.user?.id ?? null;
   const [input, setInput] = useState<JobsInput | null>(null);
+  // The latest `tickets` snapshot (020); null when the read failed — the top line says so.
+  const [ticketRuns, setTicketRuns] = useState<StoredRun<TicketsPayload>[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [now, setNow] = useState(() => new Date());
   // Only the newest fetch may land: a slow poll that returns after a newer
@@ -46,7 +49,7 @@ export function useJobs(): { screen: JobsScreen | null; loading: boolean } {
       return q.order('finished_at', { ascending: false }).limit(1).maybeSingle();
     };
     try {
-      const [live, gitlab, jobs, intents, resolutions] = await Promise.all([
+      const [live, gitlab, jobs, intents, resolutions, ticketRun] = await Promise.all([
         latest('session_check', 'live'),
         latest('gitlab'),
         supabase
@@ -68,9 +71,10 @@ export function useJobs(): { screen: JobsScreen | null; loading: boolean } {
           .select('run_id, reason, resolved_at')
           .gte('resolved_at', since(INTENTS_WINDOW_MS))
           .limit(FETCH_LIMIT),
+        latest('tickets'),
       ]);
       if (mine !== seq.current) return;
-      const failed = [live, gitlab, jobs, intents, resolutions].find((r) => r.error);
+      const failed = [live, gitlab, jobs, intents, resolutions, ticketRun].find((r) => r.error);
       if (failed) throw failed.error;
       setInput({
         reach: { ok: true },
@@ -80,11 +84,13 @@ export function useJobs(): { screen: JobsScreen | null; loading: boolean } {
         intents: (intents.data ?? []) as StoredRun<IntentRequestPayload>[],
         resolutions: (resolutions.data ?? []) as StoredResolution[],
       });
+      setTicketRuns(ticketRun.data ? [ticketRun.data as StoredRun<TicketsPayload>] : []);
     } catch (err) {
       if (mine !== seq.current) return;
       const reach: Reach = { ok: false, at: new Date().toISOString(), reason: classifyFailure(err as { message?: string; code?: string }) };
       // A screen that could not ask shows that, not the last thing it heard.
       setInput({ reach, ...EMPTY });
+      setTicketRuns(null);
     } finally {
       if (mine === seq.current) {
         setLoading(false);
@@ -109,5 +115,6 @@ export function useJobs(): { screen: JobsScreen | null; loading: boolean } {
   }, [fetchAll]);
 
   const screen = useMemo(() => (input ? jobsScreen(input, now) : null), [input, now]);
-  return { screen, loading };
+  const tickets = useMemo(() => (ticketRuns ? ticketsBoard(ticketRuns, now) : null), [ticketRuns, now]);
+  return { screen, tickets, loading };
 }
