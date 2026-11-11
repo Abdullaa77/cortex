@@ -518,3 +518,74 @@ describe('contract v1, 2026-10-16 addition — intent_request session_name + job
     ]);
   });
 });
+
+describe('contract v1, 2026-11-11 addition — kind: tickets (020, T-1)', () => {
+  const row = (over: Record<string, unknown> = {}) => ({
+    id: 'T-1',
+    title: 'Workflow v2 (tickets, faster train, models, rules diet, scorecard)',
+    status: 'building',
+    next: 'pick trial tickets and run them',
+    waves: ['workflow-v2'],
+    mrs: ['main-backend!918'],
+    heard_at: '2026-11-11T10:00:00Z',
+    updated_at: '2026-11-11T17:00:00Z',
+    reopened: 0,
+    ...over,
+  });
+  const ledger = (tickets: unknown[]) => envelopeOf('tickets', { tickets });
+
+  test('a ledger with a full row and a minimal row is accepted; producer is "ticket"', () => {
+    const min = row({ id: 'T-2', status: 'needs-you', waves: [], mrs: [] });
+    delete (min as Record<string, unknown>).next;
+    const e = ledger([row(), min]);
+    assert.equal((e.producer as { name: string }).name, 'ticket');
+    assert.deepEqual(errorsOf(e), []);
+    assert.deepEqual(errorsOf(ledger([])), []);
+  });
+
+  test('every row field but kind/next is required', () => {
+    assert.deepEqual(errorsOf(ledger([{ id: 'T-1' }])), [
+      '$.payload.tickets[0].title: required',
+      '$.payload.tickets[0].status: required',
+      '$.payload.tickets[0].waves: required',
+      '$.payload.tickets[0].mrs: required',
+      '$.payload.tickets[0].heard_at: required',
+      '$.payload.tickets[0].updated_at: required',
+      '$.payload.tickets[0].reopened: required',
+    ]);
+  });
+
+  test('status is one of the six ledger columns; id is T-<n>; ids are unique', () => {
+    assert.deepEqual(errorsOf(ledger([row({ status: 'shipped' })])), [
+      '$.payload.tickets[0].status: must be one of new|building|needs-you|in-queue|live|done',
+    ]);
+    assert.deepEqual(errorsOf(ledger([row({ id: 'T-01' })])), ['$.payload.tickets[0].id: does not match /^T-[1-9][0-9]*$/']);
+    assert.deepEqual(errorsOf(ledger([row(), row()])), ['$.payload.tickets[1].id: duplicate']);
+  });
+
+  test("Scott's verbatim words never travel: `words` is an unknown key, `note` a forbidden one", () => {
+    assert.deepEqual(errorsOf(ledger([row({ words: 'we gotta change the way we work' })])), ['$.payload.tickets[0].words: unknown key']);
+    assert.deepEqual(errorsOf(ledger([row({ note: 'x' })])), ['$.payload.tickets[0].note: forbidden key']);
+  });
+
+  test('caps: title ≤ 120, next ≤ 240 with its truncation flag only beside it', () => {
+    assert.deepEqual(errorsOf(ledger([row({ title: 'x'.repeat(121) })])), ['$.payload.tickets[0].title: longer than 120']);
+    assert.deepEqual(errorsOf(ledger([row({ next: 'x'.repeat(241) })])), ['$.payload.tickets[0].next: longer than 240']);
+    const r = row({ next_truncated: true });
+    delete (r as Record<string, unknown>).next;
+    assert.deepEqual(errorsOf(ledger([r])), ['$.payload.tickets[0].next_truncated: set without next']);
+  });
+
+  test('an MR is repo!iid, a wave is a slug, reopened is a count', () => {
+    assert.deepEqual(errorsOf(ledger([row({ mrs: ['!918'], waves: ['Workflow V2'], reopened: -1 })])), [
+      '$.payload.tickets[0].waves[0]: does not match /^[a-z0-9][a-z0-9.-]*$/',
+      '$.payload.tickets[0].mrs[0]: does not match /^[\\w.-]+![0-9]+$/',
+      '$.payload.tickets[0].reopened: must be an integer ≥ 0',
+    ]);
+  });
+
+  test('more than 500 tickets is refused', () => {
+    const many = Array.from({ length: 501 }, (_, i) => row({ id: `T-${i + 1}` }));
+    assert.deepEqual(errorsOf(ledger(many)), ['$.payload.tickets: more than 500']);
+  });
+});
