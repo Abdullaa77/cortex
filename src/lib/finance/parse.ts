@@ -99,6 +99,11 @@ export interface ParseResult {
   flags: ParseFlag[];
   /** Numbers found past the leading amount — prose, not transactions. */
   extraNumbers: string[];
+  /**
+   * True for a `*` line: a move between Scott's own accounts. The single
+   * transaction carries the amount; which accounts is asked, never parsed.
+   */
+  isMove?: boolean;
 }
 
 /** Flags that mean the line cannot be imported without Scott looking at it. */
@@ -320,6 +325,8 @@ export function parseLine(raw: string): ParseResult {
     };
   }
 
+  if (line.startsWith('*')) return parseMove(raw, line.slice(1));
+
   const signMatch = /^([+-])\s*/.exec(line);
   const explicitSign = signMatch ? signMatch[1] : null;
   const direction: Direction = explicitSign === '+' ? 'income' : 'expense';
@@ -381,6 +388,34 @@ export function parseLine(raw: string): ParseResult {
     transactions,
     flags: finalFlags,
     extraNumbers,
+  };
+}
+
+/**
+ * `*250k card to cash` — a move between own accounts. Same amount grammar as
+ * any line (so a bare `*250` still raises BARE_SMALL_AMOUNT and the bot asks
+ * "250 or 250,000?"), but the wording is never a transfer *suspect*: the `*`
+ * already says it is one.
+ */
+function parseMove(raw: string, body: string): ParseResult {
+  const parsed = parseSegment(body.trim(), 'expense');
+  if (!parsed) {
+    return {
+      raw,
+      ok: false,
+      transactions: [],
+      flags: [{ code: 'NO_AMOUNT', detail: 'no leading amount found' }],
+      extraNumbers: [],
+    };
+  }
+  const flags = parsed.flags.filter((f) => f.code !== 'TRANSFER_SUSPECT');
+  return {
+    raw,
+    ok: !flags.some((f) => BLOCKING.has(f.code)),
+    transactions: [parsed.txn],
+    flags,
+    extraNumbers: parsed.extraNumbers,
+    isMove: true,
   };
 }
 
