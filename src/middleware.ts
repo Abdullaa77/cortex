@@ -26,10 +26,12 @@ export const config = {
      * - api/ops/intents (the dev-box daemon's read + confirm pair. Same
      *   bearer token, no session; checked in the database by
      *   ops_intents_pending / ops_intent_applied, migration 015)
+     * - api/telegram/webhook (Telegram has no cookie. Guarded by the secret
+     *   header, the owner-id check and the database token, migration 021)
      * - unreachable (says the database did not answer. It must render
      *   without a session, because the session is what could not be checked)
      * - public assets (svg, png, jpg, etc.)
      */
-    '/((?!_next/static|_next/image|favicon.ico|manifest.json|sw.js|offline|unreachable|api/version|api/ops/ingest|api/ops/intents|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|manifest.json|sw.js|offline|unreachable|api/version|api/ops/ingest|api/ops/intents|api/telegram/webhook|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 };
