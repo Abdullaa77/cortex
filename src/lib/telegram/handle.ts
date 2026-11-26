@@ -6,7 +6,7 @@
  * token-checked inside Postgres (migration 021); this module never sees a key.
  */
 import { reconcileCount } from '../finance/checkpoints.ts';
-import { isAccountKey, type AccountKey } from './accounts.ts';
+import { ACCOUNT_KEYS, isAccountKey, type AccountKey } from './accounts.ts';
 import { decode } from './callbacks.ts';
 import {
   decideMessage,
@@ -19,6 +19,7 @@ import {
 } from './intent.ts';
 import type { Incoming } from './update.ts';
 import {
+  renderBalanceQuestion,
   renderCategoryMenu,
   renderGap,
   renderMoveTo,
@@ -129,8 +130,12 @@ async function perform(
       const result = reconcileCount(inputs.accountId, inputs.checkpoints, inputs.rows, day, d.countedMinor);
       const saved = await deps.rpc('bot_checkpoint', { p_account: d.account, p_counted_minor: d.countedMinor, p_day: day });
       if (!saved.ok) return show(FAIL);
-      await deps.rpc('bot_state_set', { p_patch: { pendingBalance: null } });
-      return show(renderGap(d.account, d.countedMinor, result.gapMinor));
+      // Sunday: after each count, ask the next account (cash, then every card).
+      const next = new Date(`${day}T00:00:00Z`).getUTCDay() === 0 ? ACCOUNT_KEYS[ACCOUNT_KEYS.indexOf(d.account) + 1] : undefined;
+      await deps.rpc('bot_state_set', { p_patch: { pendingBalance: next ?? null } });
+      await show(renderGap(d.account, d.countedMinor, result.gapMinor));
+      if (next) await deps.send(chatId, renderBalanceQuestion(next));
+      return;
     }
   }
 }
