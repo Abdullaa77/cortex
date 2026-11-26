@@ -75,6 +75,8 @@ the lines below.
 
 | when (Tashkent) | line | category | account (best guess — Scott confirms) |
 |---|---|---|---|
+| 23 Nov 19:03 | +80,000 XAZNA P2P — transfer from mom (Scott 26 Nov) | income (family; not a repayment) | Humo6604 |
+| 23 Nov 20:34 | +6,000,000 HAMKOR HUMO P2P — first part of monthly income (Scott 26 Nov) | income (salary) | Humo6604 |
 | 24 Nov 17:06 | −70,200 VIA PAYMENT — phone plan (his + mom's) | phone-internet | Humo |
 | 24 Nov 18:08 | −930,823.89 Muxlisa opa reimbursement | transfer/debt; opens owed-to-me 930,823.89 | Uzum |
 | 24 Nov 18:17 | −10k taxi | transport | Cash |
@@ -92,7 +94,7 @@ the lines below.
 | 25 Nov 12:18 | +310k Muxlisa opa paying back | repayment; owed-to-me → 620,823.89 | Humo |
 
 Bank screenshots also show many Humo→Visa and Visa→Humo/Uzcard moves on 23–24 Nov (fee-avoidance hops). They
-cancel out; do not load them unless Scott asks. Scott still owes a screenshot of the "+80k and +6M" lines.
+cancel out; do not load them unless Scott asks. The "+80k and +6M" lines are now in the table (Scott answered 26 Nov).
 Load via a script with: printed plan → Scott "yes" → run → undo file → re-run shows 0 changes.
 
 ## Plan — `[step] → verify`
@@ -143,5 +145,5 @@ Verbatim, from the planning session (2026-11-25):
 - Balance checks: "a" (cash nightly, cards Sunday). Day-close time: "9pm". Dior due: "30th november then".
 - Build phase 1: "yes". Default account: "a" (cash default + one-tap account buttons).
 
-Open asks to Scott: screenshot of the "+80k and +6 million" lines (screens 1 and 2 he sent were identical).
+Open asks to Scott: none on starting data (+80k/+6M answered 26 Nov).
 Promises made: phase 2 = tasks, reminders, notes through the bot.
