@@ -127,6 +127,15 @@ describe('021 — who can call', () => {
     }
   });
 
+  test('a short token is refused even if its hash was stored', async () => {
+    const db = await ready;
+    await db.query(
+      `INSERT INTO ops_private.bot_tokens (token_hash, user_id, label) VALUES (sha256(convert_to('short-secret', 'UTF8')), $1, 'weak')`,
+      [SCOTT]
+    );
+    assert.equal((await rpc('bot_context', 'short-secret')).error, 'unauthorized');
+  });
+
   test('wrong, short, null and revoked tokens are refused by every door', async () => {
     const id = '00000000-0000-0000-0000-000000000001';
     for (const t of ['x'.repeat(43), 'short', null, REVOKED]) {
@@ -195,6 +204,9 @@ describe('021 — isolation between users', () => {
   test('pending rows are claimed once and are private to their owner', async () => {
     const p = await rpc('bot_pending_put', TOKEN, 'confirm', '10', JSON.stringify({ a: 1 }));
     assert.equal((await rpc('bot_pending_get', OTHER_TOKEN, p.id)).error, 'not_found');
+    // another user's resolve must neither return nor consume my row
+    assert.equal((await rpc('bot_pending_resolve', OTHER_TOKEN, p.id)).error, 'not_found');
+    assert.equal((await rpc('bot_pending_get', TOKEN, p.id)).ok, true);
     assert.equal((await rpc('bot_pending_patch', TOKEN, p.id, JSON.stringify({ from: 'humo' }))).ok, true);
     const got = await rpc('bot_pending_resolve', TOKEN, p.id);
     assert.deepEqual(got.payload, { a: 1, from: 'humo' });
