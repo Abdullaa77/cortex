@@ -264,6 +264,14 @@ describe('021 — counts, summary, owed, state', () => {
     }
   });
 
+  test('seen_update: first delivery is fresh, a repeat or older id is not; bad token refused', async () => {
+    assert.equal((await rpc('bot_seen_update', TOKEN, 100)).fresh, true);
+    assert.equal((await rpc('bot_seen_update', TOKEN, 100)).fresh, false);
+    assert.equal((await rpc('bot_seen_update', TOKEN, 99)).fresh, false);
+    assert.equal((await rpc('bot_seen_update', TOKEN, 101)).fresh, true);
+    assert.equal((await rpc('bot_seen_update', 'x'.repeat(43), 102)).error, 'unauthorized');
+  });
+
   test('state: patch applies present keys only; bad value refused', async () => {
     assert.equal((await rpc('bot_state_set', TOKEN, JSON.stringify({ pendingBalance: 'cash' }))).ok, true);
     assert.equal((await rpc('bot_state_set', TOKEN, JSON.stringify({ snoozeUntil: '2026-11-26T12:00:00Z' }))).ok, true);

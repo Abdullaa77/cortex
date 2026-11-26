@@ -46,7 +46,13 @@ export async function runJob(job: Job, deps: Deps, chatId: number): Promise<{ se
     // Mark the question open BEFORE asking, so a fast answer is never lost.
     const st = await deps.rpc('bot_state_set', { p_patch: { pendingBalance: 'cash', snoozeUntil: null } });
     if (!st.ok) throw new Error('state_failed');
-    await say(renderDayClose({ dateLabel: label, totalMinor: Number(s.totalMinor), top: s.top ?? [], sunday }));
+    try {
+      await say(renderDayClose({ dateLabel: label, totalMinor: Number(s.totalMinor), top: s.top ?? [], sunday }));
+    } catch (e) {
+      // No question was shown: a later bare number must not become a cash count.
+      await deps.rpc('bot_state_set', { p_patch: { pendingBalance: null } });
+      throw e;
+    }
   }
 
   if (job === 'due') {

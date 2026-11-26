@@ -132,7 +132,8 @@ async function perform(
       if (!saved.ok) return show(FAIL);
       // Sunday: after each count, ask the next account (cash, then every card).
       const next = new Date(`${day}T00:00:00Z`).getUTCDay() === 0 ? ACCOUNT_KEYS[ACCOUNT_KEYS.indexOf(d.account) + 1] : undefined;
-      await deps.rpc('bot_state_set', { p_patch: { pendingBalance: next ?? null } });
+      const adv = await deps.rpc('bot_state_set', { p_patch: { pendingBalance: next ?? null } });
+      if (!adv.ok) return show(renderGap(d.account, d.countedMinor, result.gapMinor));
       await show(renderGap(d.account, d.countedMinor, result.gapMinor));
       if (next) await deps.send(chatId, renderBalanceQuestion(next));
       return;
@@ -149,10 +150,11 @@ export async function handleMessage(deps: Deps, chatId: number, text: string): P
     .map((l) => l.trim())
     .filter(Boolean);
   const decisions = decideMessage(text, loaded.ctx);
-  for (let i = 0; i < decisions.length; i++) {
-    // Only the first line may answer an open balance question; once it did, the rest are ordinary lines.
-    if (i === 1) loaded.ctx = { ...loaded.ctx, pendingBalance: null };
-    await perform(deps, chatId, decisions[i], lines[i] ?? text.trim(), loaded);
+  // Only the first line may answer an open balance question; the rest are decided without it.
+  const rest = decisions.length > 1 ? decideMessage(lines.slice(1).join('\n'), { ...loaded.ctx, pendingBalance: null }) : [];
+  const all = [decisions[0], ...rest].filter(Boolean);
+  for (let i = 0; i < all.length; i++) {
+    await perform(deps, chatId, all[i], lines[i] ?? text.trim(), loaded);
   }
 }
 
@@ -201,11 +203,14 @@ export async function handleCallback(
     }
 
     case 'moveTo': {
-      // Claim first: a double tap must not move the money twice.
+      // Look first: a bad tap must not burn the pending. Then claim, so a double tap moves money once.
+      const peek = await deps.rpc('bot_pending_get', { p_id: op.pending });
+      if (!peek.ok) return edit(peek.error === 'not_found' ? NOT_FOUND : FAIL);
+      const peekFrom = peek.payload?.from as AccountKey | undefined;
+      if (!peekFrom || !isAccountKey(peekFrom) || peekFrom === op.account) return edit(FAIL);
       const got = await deps.rpc('bot_pending_resolve', { p_id: op.pending });
       if (!got.ok) return edit(got.error === 'not_found' ? NOT_FOUND : FAIL);
-      const from = got.payload?.from as AccountKey | undefined;
-      if (!from || !isAccountKey(from) || from === op.account) return edit(FAIL);
+      const from = peekFrom;
       const r = await deps.rpc('bot_move', {
         p_raw: got.raw,
         p_amount_minor: Number(got.payload.amountMinor),

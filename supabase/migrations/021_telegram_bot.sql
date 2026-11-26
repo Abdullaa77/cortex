@@ -67,6 +67,7 @@ CREATE TABLE ops_private.bot_state (
   user_id         UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   pending_balance TEXT CHECK (pending_balance IN ('cash', 'humo', 'uzum', 'ofb', 'c7113')),
   snooze_until    TIMESTAMPTZ,
+  last_update_id  BIGINT,
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -385,7 +386,7 @@ BEGIN
        WHERE t.user_id = v_user
          AND (t.from_account_id = v_acct OR t.to_account_id = v_acct)
          AND v_first IS NOT NULL
-         AND t.occurred_at >= v_first::timestamptz), '[]'::jsonb)
+         AND t.occurred_at >= (v_first::timestamp AT TIME ZONE 'Asia/Tashkent')), '[]'::jsonb)
   );
 END
 $$;
@@ -463,6 +464,24 @@ BEGIN
 EXCEPTION
   WHEN check_violation OR invalid_datetime_format OR invalid_text_representation THEN
     RETURN jsonb_build_object('ok', false, 'error', 'invalid', 'detail', SQLERRM);
+END
+$$;
+
+-- Telegram redelivers an update when we answer slowly: only the first delivery
+-- of an update_id may act. Atomic, so two parallel deliveries cannot both pass.
+CREATE FUNCTION public.bot_seen_update(p_token TEXT, p_id BIGINT) RETURNS JSONB
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = ''
+AS $$
+DECLARE
+  v_user UUID := ops_private.bot_user(p_token);
+  v_hit  INT;
+BEGIN
+  IF v_user IS NULL THEN RETURN jsonb_build_object('ok', false, 'error', 'unauthorized'); END IF;
+  INSERT INTO ops_private.bot_state (user_id) VALUES (v_user) ON CONFLICT (user_id) DO NOTHING;
+  UPDATE ops_private.bot_state SET last_update_id = p_id, updated_at = now()
+   WHERE user_id = v_user AND (last_update_id IS NULL OR last_update_id < p_id);
+  GET DIAGNOSTICS v_hit = ROW_COUNT;
+  RETURN jsonb_build_object('ok', true, 'fresh', v_hit = 1);
 END
 $$;
 
@@ -605,6 +624,7 @@ REVOKE ALL ON FUNCTION
   public.bot_context(TEXT),
   public.bot_day_summary(TEXT, DATE),
   public.bot_state_set(TEXT, JSONB),
+  public.bot_seen_update(TEXT, BIGINT),
   public.bot_pending_put(TEXT, TEXT, TEXT, JSONB),
   public.bot_pending_get(TEXT, UUID),
   public.bot_pending_resolve(TEXT, UUID),
@@ -628,6 +648,7 @@ BEGIN
       public.bot_context(TEXT),
       public.bot_day_summary(TEXT, DATE),
       public.bot_state_set(TEXT, JSONB),
+      public.bot_seen_update(TEXT, BIGINT),
       public.bot_pending_put(TEXT, TEXT, TEXT, JSONB),
       public.bot_pending_get(TEXT, UUID),
       public.bot_pending_resolve(TEXT, UUID),

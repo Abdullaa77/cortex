@@ -60,6 +60,15 @@ describe('webhook', () => {
     assert.ok(s.rpcs.includes('bot_capture'));
   });
 
+  test('a redelivered update_id is acknowledged and not handled twice', async () => {
+    const s = setup();
+    const base = s.deps.rpc;
+    s.deps.rpc = async (fn, args) => (fn === 'bot_seen_update' ? { ok: true, fresh: false } : base(fn, args));
+    const r = await webhook(post({ update_id: 7, ...update(4242) }, { [SECRET_HEADER]: CFG.secret }), CFG, s.deps);
+    assert.equal(r.status, 200);
+    assert.equal(s.rpcs.includes('bot_capture'), false);
+  });
+
   test('garbage and oversize bodies are 200 and untouched (no Telegram retry loop)', async () => {
     const s = setup();
     const h = { [SECRET_HEADER]: CFG.secret };

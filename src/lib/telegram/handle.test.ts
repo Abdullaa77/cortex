@@ -97,7 +97,7 @@ describe('handleIncoming', () => {
   test('a move takes two taps and moves the money once', async () => {
     const h = harness({
       bot_pending_put: { ok: true, id: ID },
-      bot_pending_get: { ok: true, payload: { amountMinor: 25000000, comment: 'card to cash' } },
+      bot_pending_get: { ok: true, payload: { amountMinor: 25000000, comment: 'card to cash', from: 'humo' } },
       bot_pending_resolve: { ok: true, raw: '*250k card to cash', payload: { amountMinor: 25000000, comment: 'card to cash', from: 'humo' } },
       bot_move: { ok: true, saved: [{ id: ID, direction: 'move', amountMinor: 25000000, categorySlug: null, account: 'humo', toAccount: 'cash' }] },
     });
@@ -111,10 +111,27 @@ describe('handleIncoming', () => {
 
   test('a move to the same account it came from is refused', async () => {
     const h = harness({
+      bot_pending_get: { ok: true, payload: { amountMinor: 1, comment: '', from: 'cash' } },
       bot_pending_resolve: { ok: true, raw: '*1m x', payload: { amountMinor: 1, comment: '', from: 'cash' } },
     });
     await handleIncoming(h.deps, cb(encode({ op: 'moveTo', pending: ID, account: 'cash' })));
     assert.equal(h.calls.some((c) => c.fn === 'bot_move'), false);
+  });
+
+  test('a refused move leaves the pending alone (not claimed)', async () => {
+    const h = harness({ bot_pending_get: { ok: true, payload: { amountMinor: 1, comment: '', from: 'cash' } } });
+    await handleIncoming(h.deps, cb(encode({ op: 'moveTo', pending: ID, account: 'cash' })));
+    assert.equal(h.calls.some((c) => c.fn === 'bot_pending_resolve'), false);
+  });
+
+  test('only the first line of a message may answer the balance question', async () => {
+    const h = harness({
+      bot_context: { ok: true, learned: {}, categories: [], owed: [], pendingBalance: 'cash' },
+      bot_balance_inputs: { ok: true, accountId: 'a1', checkpoints: [], rows: [] },
+    });
+    await handleIncoming(h.deps, msg('300000\n-5000 tea'));
+    assert.equal(h.calls.filter((c) => c.fn === 'bot_checkpoint').length, 1);
+    assert.equal(h.calls.filter((c) => c.fn === 'bot_capture').length, 1);
   });
 
   test('an owed payer is asked about; yes reduces what is owed', async () => {

@@ -131,7 +131,7 @@ export function decideLine(raw: string, ctx: BotContext, opts: Options = {}): De
       return { type: 'balance', account: ctx.pendingBalance, countedMinor: counted };
   }
 
-  const r = parseLine(raw);
+  const r = parseLine(raw, { allowMove: true });
 
   if (r.transactions.length === 0)
     return say('I could not find an amount. Try: -25k taxi');

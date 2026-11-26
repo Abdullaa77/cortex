@@ -28,7 +28,14 @@ async function call(env: BotEnv, method: string, body: Record<string, unknown>, 
   } catch {
     throw new Error(`telegram ${method}: unreachable`);
   }
-  if (!res.ok) throw new Error(`telegram ${method}: ${res.status}`);
+  if (!res.ok) {
+    // Tapping the same choice again re-sends identical text: Telegram's 400 is harmless.
+    if (res.status === 400 && method === 'editMessageText') {
+      const body = await res.text().catch(() => '');
+      if (body.includes('message is not modified')) return;
+    }
+    throw new Error(`telegram ${method}: ${res.status}`);
+  }
 }
 
 export function makeDeps(env: BotEnv, f: typeof fetch = fetch): Deps {

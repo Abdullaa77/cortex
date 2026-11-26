@@ -312,7 +312,7 @@ function parseSegment(
  * never allowed to override that — when the two disagree the line is flagged
  * for a human instead.
  */
-export function parseLine(raw: string): ParseResult {
+export function parseLine(raw: string, opts: { allowMove?: boolean } = {}): ParseResult {
   const line = raw.trim();
 
   if (!line || /^[A-Za-z]+:?$/.test(line)) {
@@ -325,7 +325,7 @@ export function parseLine(raw: string): ParseResult {
     };
   }
 
-  if (line.startsWith('*')) return parseMove(raw, line.slice(1));
+  if (opts.allowMove && line.startsWith('*')) return parseMove(raw, line.slice(1));
 
   const signMatch = /^([+-])\s*/.exec(line);
   const explicitSign = signMatch ? signMatch[1] : null;
@@ -425,7 +425,7 @@ export function parseNotes(text: string): ParseResult[] {
     .split('\n')
     .map((l) => l.trim())
     .filter((l) => l.length > 0)
-    .map(parseLine);
+    .map((l) => parseLine(l));
 }
 
 /** Format integer minor units back to human text, for reports and review UI. */

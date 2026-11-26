@@ -31,6 +31,16 @@ describe('cron jobs', () => {
     assert.equal(s.calls.find((c) => c.fn === 'bot_day_summary')!.args.p_day, '2026-11-25');
   });
 
+  test('day-close: if the question cannot be sent, the open question is cleared again', async () => {
+    const s = setup('2026-11-25T16:00:00Z', { bot_day_summary: { ok: true, totalMinor: 0, top: [] } });
+    s.deps.send = async () => {
+      throw new Error('502');
+    };
+    await assert.rejects(runJob('dayclose', s.deps, 1));
+    const sets = s.calls.filter((c) => c.fn === 'bot_state_set');
+    assert.deepEqual(sets[sets.length - 1].args.p_patch, { pendingBalance: null });
+  });
+
   test('day-close on Sunday mentions the cards', async () => {
     const s = setup('2026-11-29T16:00:00Z', { bot_day_summary: { ok: true, totalMinor: 0, top: [] } });
     await runJob('dayclose', s.deps, 1);

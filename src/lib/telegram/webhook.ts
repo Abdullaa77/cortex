@@ -45,6 +45,12 @@ export async function webhook(request: Request, cfg: WebhookConfig | null, deps:
 
   const incoming = parseUpdate(update, cfg.ownerId);
   if (incoming.kind === 'ignore') return reply(200, { ok: true });
+  // A redelivered update must not act twice (a retried save would be a double save).
+  const updateId = (update as { update_id?: unknown }).update_id;
+  if (typeof updateId === 'number' && Number.isSafeInteger(updateId)) {
+    const seen = await deps.rpc('bot_seen_update', { p_id: updateId }).catch(() => ({ ok: false, fresh: true }));
+    if (seen.ok && seen.fresh === false) return reply(200, { ok: true });
+  }
   try {
     await handleIncoming(deps, incoming);
   } catch {
