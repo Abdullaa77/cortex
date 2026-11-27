@@ -80,6 +80,12 @@ describe("Scott's real lines", () => {
     const d = decideLine('*250k card to cash', ctx());
     assert.equal(d.type === 'ask' && d.kind, 'move');
   });
+
+  test('*1,5k (unclear decimal comma) is refused, never sent to from/to with a guessed amount', () => {
+    const d = decideLine('*1,5k humo to cash', ctx());
+    assert.equal(d.type, 'say');
+    assert.match(d.type === 'say' ? d.reply.text : '', /again/);
+  });
 });
 
 describe('flagged lines are asked before saving', () => {

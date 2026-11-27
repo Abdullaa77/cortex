@@ -132,7 +132,7 @@ async function perform(
       if (!saved.ok) return show(FAIL);
       // Sunday: after each count, ask the next account (cash, then every card).
       const next = new Date(`${day}T00:00:00Z`).getUTCDay() === 0 ? ACCOUNT_KEYS[ACCOUNT_KEYS.indexOf(d.account) + 1] : undefined;
-      const adv = await deps.rpc('bot_state_set', { p_patch: { pendingBalance: next ?? null } });
+      const adv = await deps.rpc('bot_state_set', { p_patch: { pendingBalance: next ?? null, snoozeUntil: null } });
       if (!adv.ok) return show(renderGap(d.account, d.countedMinor, result.gapMinor));
       await show(renderGap(d.account, d.countedMinor, result.gapMinor));
       if (next) await deps.send(chatId, renderBalanceQuestion(next));
@@ -218,7 +218,13 @@ export async function handleCallback(
         p_from: from,
         p_to: op.account,
       });
-      if (!r.ok) return edit(FAIL);
+      if (!r.ok) {
+        // The claim above burned the pending; put it back so one more tap can finish the move.
+        const back = await deps.rpc('bot_pending_put', { p_kind: 'move', p_raw: got.raw, p_payload: got.payload });
+        if (!back.ok) return edit(FAIL);
+        const again = renderMoveTo(String(back.id), Number(got.payload.amountMinor), from);
+        return edit({ ...again, text: `That did not go through — nothing was moved. Try again.\n${again.text}` });
+      }
       return edit(renderTxn((r.saved as TxnView[])[0], loaded.cats));
     }
 

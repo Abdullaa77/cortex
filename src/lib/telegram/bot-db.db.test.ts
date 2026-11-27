@@ -49,6 +49,7 @@ const ready = (async () => {
     '010_beneficiary.sql',
     '013_ops_ingest.sql',
     '021_telegram_bot.sql',
+    '022_telegram_bot_fixes.sql',
   ])
     await db.exec(mig(f));
 
@@ -264,9 +265,11 @@ describe('021 — counts, summary, owed, state', () => {
     }
   });
 
-  test('seen_update: first delivery is fresh, a repeat or older id is not; bad token refused', async () => {
+  test('seen_update: first delivery is fresh, an exact repeat is not, out-of-order ids are kept; bad token refused', async () => {
     assert.equal((await rpc('bot_seen_update', TOKEN, 100)).fresh, true);
     assert.equal((await rpc('bot_seen_update', TOKEN, 100)).fresh, false);
+    // 022: two messages handled at once can commit out of order; the lower id is a real message.
+    assert.equal((await rpc('bot_seen_update', TOKEN, 99)).fresh, true);
     assert.equal((await rpc('bot_seen_update', TOKEN, 99)).fresh, false);
     assert.equal((await rpc('bot_seen_update', TOKEN, 101)).fresh, true);
     assert.equal((await rpc('bot_seen_update', 'x'.repeat(43), 102)).error, 'unauthorized');
@@ -281,5 +284,31 @@ describe('021 — counts, summary, owed, state', () => {
     assert.equal((await rpc('bot_state_set', TOKEN, JSON.stringify({ pendingBalance: 'bogus' }))).ok, false);
     assert.equal((await rpc('bot_state_set', TOKEN, JSON.stringify({ pendingBalance: null }))).ok, true);
     assert.equal((await rpc('bot_context', TOKEN)).pendingBalance, null);
+  });
+
+  test('022: an unanswered balance question expires after 6 hours', async () => {
+    const db = await ready;
+    assert.equal((await rpc('bot_state_set', TOKEN, JSON.stringify({ pendingBalance: 'cash' }))).ok, true);
+    assert.equal((await rpc('bot_context', TOKEN)).pendingBalance, 'cash');
+    await db.query(
+      `UPDATE ops_private.bot_state SET pending_balance_at = now() - interval '7 hours' WHERE user_id = $1`,
+      [SCOTT]
+    );
+    assert.equal((await rpc('bot_context', TOKEN)).pendingBalance, null);
+    // a fresh question starts a fresh clock
+    assert.equal((await rpc('bot_state_set', TOKEN, JSON.stringify({ pendingBalance: 'humo' }))).ok, true);
+    assert.equal((await rpc('bot_context', TOKEN)).pendingBalance, 'humo');
+    assert.equal((await rpc('bot_state_set', TOKEN, JSON.stringify({ pendingBalance: null }))).ok, true);
+  });
+
+  test('022: a move with no category is still not counted as spending', async () => {
+    const db = await ready;
+    const today = (await db.query<{ d: string }>(
+      `SELECT ((now() AT TIME ZONE 'Asia/Tashkent')::date)::text d`)).rows[0].d;
+    const before = Number((await rpc('bot_day_summary', TOKEN, today)).totalMinor);
+    const m = await rpc('bot_move', TOKEN, '*777 test', 77700, 'nocat move', 'cash', 'humo');
+    assert.equal(m.ok, true);
+    await db.query(`UPDATE transactions SET category_id = NULL WHERE id = $1`, [m.saved[0].id]);
+    assert.equal(Number((await rpc('bot_day_summary', TOKEN, today)).totalMinor), before);
   });
 });

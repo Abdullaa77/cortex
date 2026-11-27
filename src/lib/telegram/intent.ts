@@ -149,6 +149,11 @@ export function decideLine(raw: string, ctx: BotContext, opts: Options = {}): De
         raw,
         render: (id) => renderAmountAsk(id, t.amountMinor),
       };
+    // Any other blocking flag (an unclear decimal comma, say): the amount itself
+    // is in doubt, and a move has no expense/income choice to settle it. Ask again.
+    const reasons = blockingReasons(r, [...accept, 'BARE_SMALL_AMOUNT']);
+    if (reasons.length > 0)
+      return say(`${reasons.join(' ')} Write the move again, e.g. *250k card to cash`);
     return {
       type: 'ask',
       kind: 'move',

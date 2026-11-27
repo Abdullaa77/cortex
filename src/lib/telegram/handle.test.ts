@@ -118,6 +118,23 @@ describe('handleIncoming', () => {
     assert.equal(h.calls.some((c) => c.fn === 'bot_move'), false);
   });
 
+  test('a move that fails in the database is put back, so one more tap can finish it', async () => {
+    const NEW = '223e4567-e89b-42d3-a456-426614174000';
+    const payload = { amountMinor: 25000000, comment: 'card to cash', from: 'humo' };
+    const h = harness({
+      bot_pending_get: { ok: true, payload },
+      bot_pending_resolve: { ok: true, raw: '*250k card to cash', payload },
+      bot_move: { ok: false, error: 'database_error' },
+      bot_pending_put: { ok: true, id: NEW },
+    });
+    await handleIncoming(h.deps, cb(encode({ op: 'moveTo', pending: ID, account: 'cash' })));
+    const put = h.calls.find((c) => c.fn === 'bot_pending_put')!;
+    assert.deepEqual(put.args.p_payload, payload);
+    const last = h.edited.at(-1)!;
+    assert.match(last.text, /nothing was moved/);
+    assert.ok(last.buttons.length > 0);
+  });
+
   test('a refused move leaves the pending alone (not claimed)', async () => {
     const h = harness({ bot_pending_get: { ok: true, payload: { amountMinor: 1, comment: '', from: 'cash' } } });
     await handleIncoming(h.deps, cb(encode({ op: 'moveTo', pending: ID, account: 'cash' })));
@@ -159,7 +176,7 @@ describe('handleIncoming', () => {
     assert.deepEqual([cp.args.p_account, cp.args.p_day], ['cash', '2026-11-27']);
     const order = h.calls.map((c) => c.fn);
     assert.ok(order.indexOf('bot_balance_inputs') < order.indexOf('bot_checkpoint'), 'reconcile before storing');
-    assert.deepEqual(h.calls.find((c) => c.fn === 'bot_state_set')!.args.p_patch, { pendingBalance: null });
+    assert.deepEqual(h.calls.find((c) => c.fn === 'bot_state_set')!.args.p_patch, { pendingBalance: null, snoozeUntil: null });
     assert.match(h.sent[0].text, /where it starts/);
   });
 
