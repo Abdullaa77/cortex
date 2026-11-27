@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { makeDeps } from '@/lib/telegram/api';
 import { webhook } from '@/lib/telegram/webhook';
 
@@ -15,7 +16,14 @@ export async function POST(request: Request) {
     return Response.json({ ok: false, error: 'not_configured' }, { status: 503 });
   return webhook(
     request,
-    { secret: TELEGRAM_WEBHOOK_SECRET, ownerId: Number(TELEGRAM_OWNER_ID) },
+    {
+      secret: TELEGRAM_WEBHOOK_SECRET,
+      ownerId: Number(TELEGRAM_OWNER_ID),
+      dbToken: {
+        sha256Hex: createHash('sha256').update(CORTEX_BOT_DB_TOKEN, 'utf8').digest('hex'),
+        length: CORTEX_BOT_DB_TOKEN.length,
+      },
+    },
     makeDeps({ botToken: TELEGRAM_BOT_TOKEN, dbToken: CORTEX_BOT_DB_TOKEN })
   );
 }

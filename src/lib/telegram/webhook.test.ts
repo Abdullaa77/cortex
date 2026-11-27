@@ -86,4 +86,38 @@ describe('webhook', () => {
     assert.equal(r.status, 200);
     assert.match(s.sent[0], /went wrong/);
   });
+
+  test('database token not registered: the owner gets its fingerprint, nothing is handled', async () => {
+    const s = setup();
+    s.deps.rpc = async (fn) => {
+      s.rpcs.push(fn);
+      return { ok: false, error: 'unauthorized' };
+    };
+    const cfg = { ...CFG, dbToken: { sha256Hex: 'ab'.repeat(32), length: 43 } };
+    const r = await webhook(post({ update_id: 9, ...update(4242) }, { [SECRET_HEADER]: CFG.secret }), cfg, s.deps);
+    assert.equal(r.status, 200);
+    assert.equal(s.rpcs.includes('bot_capture'), false);
+    assert.equal(s.sent.length, 1);
+    assert.match(s.sent[0], new RegExp('ab'.repeat(32)));
+    assert.doesNotMatch(s.sent[0], /too short/);
+  });
+
+  test('database token too short to ever work: the owner is told so', async () => {
+    const s = setup();
+    s.deps.rpc = async (fn) => {
+      s.rpcs.push(fn);
+      return { ok: false, error: 'unauthorized' };
+    };
+    const cfg = { ...CFG, dbToken: { sha256Hex: 'cd'.repeat(32), length: 20 } };
+    await webhook(post({ update_id: 9, ...update(4242) }, { [SECRET_HEADER]: CFG.secret }), cfg, s.deps);
+    assert.match(s.sent[0], /too short/);
+  });
+
+  test('a stranger never sees the fingerprint', async () => {
+    const s = setup();
+    s.deps.rpc = async () => ({ ok: false, error: 'unauthorized' });
+    const cfg = { ...CFG, dbToken: { sha256Hex: 'ab'.repeat(32), length: 43 } };
+    await webhook(post({ update_id: 9, ...update(999) }, { [SECRET_HEADER]: CFG.secret }), cfg, s.deps);
+    assert.deepEqual(s.sent, []);
+  });
 });

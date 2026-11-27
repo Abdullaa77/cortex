@@ -13,6 +13,22 @@ export const MAX_UPDATE_BYTES = 64 * 1024;
 export interface WebhookConfig {
   secret: string;
   ownerId: number;
+  /**
+   * Fingerprint of the database token (sha256 hex, as ops_private.bot_tokens
+   * stores it) and its length. Never the token itself. When the database does
+   * not know the token yet, the owner is sent this so it can be registered:
+   * Vercel keeps the value locked, so this is the only way to read its hash.
+   */
+  dbToken?: { sha256Hex: string; length: number };
+}
+
+/** 021's bot_user() refuses any token shorter than this. */
+const MIN_DB_TOKEN_LENGTH = 32;
+
+function notRegisteredText(t: { sha256Hex: string; length: number }): string {
+  if (t.length < MIN_DB_TOKEN_LENGTH)
+    return `Bot not connected: CORTEX_BOT_DB_TOKEN is too short (${t.length} characters, needs ${MIN_DB_TOKEN_LENGTH}+). Set a longer value in Vercel and redeploy.`;
+  return `Bot not connected yet. Send this fingerprint to Claude (safe to share):\n${t.sha256Hex}`;
 }
 
 function sameSecret(given: string | null, expected: string): boolean {
@@ -48,8 +64,14 @@ export async function webhook(request: Request, cfg: WebhookConfig | null, deps:
   // A redelivered update must not act twice (a retried save would be a double save).
   const updateId = (update as { update_id?: unknown }).update_id;
   if (typeof updateId === 'number' && Number.isSafeInteger(updateId)) {
-    const seen = await deps.rpc('bot_seen_update', { p_id: updateId }).catch(() => ({ ok: false, fresh: true }));
+    const seen: Record<string, unknown> = await deps
+      .rpc('bot_seen_update', { p_id: updateId })
+      .catch(() => ({ ok: false, fresh: true }));
     if (seen.ok && seen.fresh === false) return reply(200, { ok: true });
+    if (seen.error === 'unauthorized' && cfg.dbToken) {
+      await deps.send(incoming.chatId, { text: notRegisteredText(cfg.dbToken), buttons: [] }).catch(() => undefined);
+      return reply(200, { ok: true });
+    }
   }
   try {
     await handleIncoming(deps, incoming);
