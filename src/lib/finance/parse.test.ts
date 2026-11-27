@@ -287,3 +287,42 @@ describe('formatMinor', () => {
     assert.equal(formatMinor(440_644), '4,406.44');
   });
 });
+
+describe('move lines (`*` prefix)', () => {
+  test('`*250 card to cash exchange` is a move, not nothing', () => {
+    const r = parseLine('*250 card to cash exchange', { allowMove: true });
+    assert.equal(r.isMove, true);
+    assert.equal(r.transactions.length, 1);
+    assert.equal(r.transactions[0].amountMinor, 25000);
+    assert.equal(r.transactions[0].comment, 'card to cash exchange');
+  });
+
+  test('a bare amount under 1000 stays flagged so the bot can ask "250 or 250,000?"', () => {
+    const r = parseLine('*250 card to cash exchange', { allowMove: true });
+    assert.ok(r.flags.some((f) => f.code === 'BARE_SMALL_AMOUNT'));
+    assert.equal(r.ok, false);
+  });
+
+  test('`*250k` is clean and not flagged as a transfer suspect', () => {
+    const r = parseLine('*250k card to cash', { allowMove: true });
+    assert.equal(r.isMove, true);
+    assert.equal(r.transactions[0].amountMinor, 25_000_000);
+    assert.equal(r.ok, true);
+    assert.ok(!r.flags.some((f) => f.code === 'TRANSFER_SUSPECT'));
+  });
+
+  test('without allowMove a leading * is not a move (imports and notes are unchanged)', () => {
+    const r = parseLine('*250k loan to Ali');
+    assert.equal(r.isMove, undefined);
+  });
+
+  test('a `*` with no amount is still NO_AMOUNT', () => {
+    const r = parseLine('* nothing here', { allowMove: true });
+    assert.equal(r.transactions.length, 0);
+    assert.ok(r.flags.some((f) => f.code === 'NO_AMOUNT'));
+  });
+
+  test('ordinary lines are not moves', () => {
+    assert.equal(parseLine('-10k taxi').isMove, undefined);
+  });
+});
