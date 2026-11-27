@@ -9,8 +9,8 @@ import { isJob, runJob, sameBearer } from '@/lib/telegram/cron';
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
-  const { TELEGRAM_BOT_TOKEN, TELEGRAM_OWNER_ID, BOT_DB_TOKEN, CORTEX_CRON_SECRET } = process.env;
-  if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_OWNER_ID || !BOT_DB_TOKEN || !CORTEX_CRON_SECRET)
+  const { TELEGRAM_BOT_TOKEN, TELEGRAM_OWNER_ID, CORTEX_BOT_DB_TOKEN, CORTEX_CRON_SECRET } = process.env;
+  if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_OWNER_ID || !CORTEX_BOT_DB_TOKEN || !CORTEX_CRON_SECRET)
     return Response.json({ ok: false, error: 'not_configured' }, { status: 503 });
   if (!sameBearer(request.headers.get('authorization'), CORTEX_CRON_SECRET))
     return Response.json({ ok: false, error: 'unauthorized' }, { status: 401 });
@@ -21,7 +21,7 @@ export async function POST(request: Request) {
   if (!Number.isSafeInteger(chatId)) return Response.json({ ok: false, error: 'not_configured' }, { status: 503 });
 
   try {
-    const r = await runJob(job, makeDeps({ botToken: TELEGRAM_BOT_TOKEN, dbToken: BOT_DB_TOKEN }), chatId);
+    const r = await runJob(job, makeDeps({ botToken: TELEGRAM_BOT_TOKEN, dbToken: CORTEX_BOT_DB_TOKEN }), chatId);
     return Response.json({ ok: true, job, ...r });
   } catch (e) {
     // The message is ours (a step name), never a URL or a token.
