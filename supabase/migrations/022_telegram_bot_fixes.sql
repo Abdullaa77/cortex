@@ -1,3 +1,4 @@
+-- @sentinel: unprobeable new objects live in ops_private and functions are replaced in place; not visible via PostgREST
 -- 022 — fixes to the Telegram bot doors (021), from the PR #22 review.
 --
 -- 1. bot_seen_update deduped on "id greater than the last one". Two messages
