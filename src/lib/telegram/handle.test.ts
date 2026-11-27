@@ -118,13 +118,30 @@ describe('handleIncoming', () => {
     assert.equal(h.calls.some((c) => c.fn === 'bot_move'), false);
   });
 
-  test('a move that fails in the database is put back, so one more tap can finish it', async () => {
+  test('a move whose result is unknown is NOT put back, so a retry tap cannot move the money twice', async () => {
+    for (const error of ['database_error', 'database_unreachable', 'empty']) {
+      const payload = { amountMinor: 25000000, comment: 'card to cash', from: 'humo' };
+      const h = harness({
+        bot_pending_get: { ok: true, payload },
+        bot_pending_resolve: { ok: true, raw: '*250k card to cash', payload },
+        bot_move: { ok: false, error },
+        bot_pending_put: { ok: true, id: ID },
+      });
+      await handleIncoming(h.deps, cb(encode({ op: 'moveTo', pending: ID, account: 'cash' })));
+      assert.equal(h.calls.some((c) => c.fn === 'bot_pending_put'), false, error);
+      const last = h.edited.at(-1)!;
+      assert.match(last.text, /not sure/i, error);
+      assert.equal(last.buttons.length, 0, error);
+    }
+  });
+
+  test('a move the database refused (nothing saved) is put back, so one more tap can finish it', async () => {
     const NEW = '223e4567-e89b-42d3-a456-426614174000';
     const payload = { amountMinor: 25000000, comment: 'card to cash', from: 'humo' };
     const h = harness({
       bot_pending_get: { ok: true, payload },
       bot_pending_resolve: { ok: true, raw: '*250k card to cash', payload },
-      bot_move: { ok: false, error: 'database_error' },
+      bot_move: { ok: false, error: 'invalid' },
       bot_pending_put: { ok: true, id: NEW },
     });
     await handleIncoming(h.deps, cb(encode({ op: 'moveTo', pending: ID, account: 'cash' })));

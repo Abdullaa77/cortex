@@ -219,6 +219,11 @@ export async function handleCallback(
         p_to: op.account,
       });
       if (!r.ok) {
+        // Only 'invalid' means the database refused and rolled back. Any other failure (lost
+        // connection, timeout) may have saved the move, so a retry button could move it twice.
+        if (r.error !== 'invalid') {
+          return edit({ text: 'Not sure that went through. Check the balance before trying again.', buttons: [] });
+        }
         // The claim above burned the pending; put it back so one more tap can finish the move.
         const back = await deps.rpc('bot_pending_put', { p_kind: 'move', p_raw: got.raw, p_payload: got.payload });
         if (!back.ok) return edit(FAIL);

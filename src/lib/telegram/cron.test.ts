@@ -78,11 +78,11 @@ describe('cron jobs', () => {
     const msg = { kind: 'message' as const, chatId: 1, messageId: 1, text: '500000' };
     const sun = setup('2026-11-29T16:30:00Z', ctx);
     await handleIncoming(sun.deps, msg);
-    assert.deepEqual(sun.calls.filter((c) => c.fn === 'bot_state_set').at(-1)!.args.p_patch, { pendingBalance: 'humo' });
+    assert.deepEqual(sun.calls.filter((c) => c.fn === 'bot_state_set').at(-1)!.args.p_patch, { pendingBalance: 'humo', snoozeUntil: null });
     assert.match(sun.sent.at(-1)!, /Humo now/i);
     const wed = setup('2026-11-25T16:30:00Z', ctx);
     await handleIncoming(wed.deps, msg);
-    assert.deepEqual(wed.calls.filter((c) => c.fn === 'bot_state_set').at(-1)!.args.p_patch, { pendingBalance: null });
+    assert.deepEqual(wed.calls.filter((c) => c.fn === 'bot_state_set').at(-1)!.args.p_patch, { pendingBalance: null, snoozeUntil: null });
   });
 });
 

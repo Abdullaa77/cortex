@@ -25,6 +25,9 @@ END
 $$;
 
 ALTER TABLE ops_private.bot_state ADD COLUMN IF NOT EXISTS pending_balance_at TIMESTAMPTZ;
+-- A question already open when 022 lands keeps its 6 h from now, not vanishes.
+UPDATE ops_private.bot_state SET pending_balance_at = now()
+ WHERE pending_balance IS NOT NULL AND pending_balance_at IS NULL;
 
 CREATE OR REPLACE FUNCTION public.bot_seen_update(p_token TEXT, p_id BIGINT) RETURNS JSONB
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = ''
@@ -57,7 +60,8 @@ BEGIN
   INSERT INTO ops_private.bot_state (user_id) VALUES (v_user) ON CONFLICT (user_id) DO NOTHING;
   UPDATE ops_private.bot_state SET
     pending_balance    = CASE WHEN p_patch ? 'pendingBalance' THEN p_patch ->> 'pendingBalance' ELSE pending_balance END,
-    pending_balance_at = CASE WHEN p_patch ? 'pendingBalance' THEN now() ELSE pending_balance_at END,
+    pending_balance_at = CASE WHEN NOT p_patch ? 'pendingBalance' THEN pending_balance_at
+                              WHEN p_patch ->> 'pendingBalance' IS NULL THEN NULL ELSE now() END,
     snooze_until       = CASE WHEN p_patch ? 'snoozeUntil' THEN (p_patch ->> 'snoozeUntil')::timestamptz ELSE snooze_until END,
     updated_at = now()
   WHERE user_id = v_user;
